@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: warehouse-db
+    environment:
+      POSTGRES_DB: openws
+      POSTGRES_USER: warehouse_user
+      POSTGRES_PASSWORD: warehouse_password
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U warehouse_user -d openws"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - warehouse-network
+
+  backend:
+    build: ./backend
+    container_name: warehouse-backend
+    environment:
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: openws
+      DB_USER: warehouse_user
+      DB_PASSWORD: warehouse_password
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - warehouse-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: warehouse-nginx
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - warehouse-network
+
+volumes:
+  postgres_data:
+
+networks:
+  warehouse-network:
+    driver: bridge

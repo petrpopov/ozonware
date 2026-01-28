@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система складского учета</title>
+    
+    <!-- jQuery (required for DataTables) -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    
+    <!-- DataTables CSS -->
+    <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/jquery.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.2/css/buttons.dataTables.min.css">
+    <link rel="stylesheet" href="https://cdn.datatables.net/colreorder/1.7.0/css/colReorder.dataTables.min.css">
+    
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📦 Система складского учета</h1>
+            <p>Управление товарами, приход, отгрузка и инвентаризация</p>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('products')">Товары</button>
+            <button class="tab" onclick="switchTab('receipt')">Приход</button>
+            <button class="tab" onclick="switchTab('shipment')">Отгрузка</button>
+            <button class="tab" onclick="switchTab('writeoff')">Списания</button>
+            <button class="tab" onclick="switchTab('inventory')">Инвентаризация</button>
+            <button class="tab" onclick="switchTab('reports')">Отчеты</button>
+            <button class="tab" onclick="switchTab('settings')">Настройки</button>
+        </div>
+
+        <div class="content">
+            <!-- Товары -->
+            <div id="products" class="tab-content active">
+                <h2>Управление товарами</h2>
+                <div class="search-box">
+                    <div class="search-input-wrapper">
+                        <input type="text" id="searchProduct" placeholder="Поиск по названию, SKU или штрихкоду...">
+                        <button class="search-clear-btn" id="clearSearch" title="Очистить поиск">✕</button>
+                    </div>
+                    <div style="display: flex; gap: 10px;">
+                        <button class="btn btn-primary" onclick="showAddProductModal()">+ Добавить товар</button>
+                        <button class="btn btn-success" onclick="showImportModal()">📥 Импорт из Excel</button>
+                    </div>
+                </div>
+                <div id="productsTable"></div>
+            </div>
+
+            <!-- Приход -->
+            <div id="receipt" class="tab-content">
+                <h2>Приход товаров</h2>
+                <p style="margin-bottom: 20px; color: #6c757d;">Оформите приход нескольких товаров одновременно</p>
+                <button class="btn btn-primary" onclick="startReceipt()">Создать приход</button>
+                <div id="receiptHistory" style="margin-top: 30px;"></div>
+            </div>
+
+            <!-- Отгрузка -->
+            <div id="shipment" class="tab-content">
+                <h2>Отгрузка товаров</h2>
+                <p style="margin-bottom: 20px; color: #6c757d;">Оформите отгрузку нескольких товаров одновременно</p>
+                <button class="btn btn-danger" onclick="startShipment()">Создать отгрузку</button>
+                <div id="shipmentHistory" style="margin-top: 30px;"></div>
+            </div>
+
+            <!-- Списания -->
+            <div id="writeoff" class="tab-content">
+                <h2>Списания товаров</h2>
+                <p style="margin-bottom: 20px; color: #6c757d;">Списание товаров по причинам: брак, потеря, резерв</p>
+                <button class="btn btn-primary" onclick="startWriteoff()">Создать списание</button>
+                
+                <h3 style="margin-top: 40px; margin-bottom: 20px;">Текущее состояние списаний</h3>
+                <div id="writeoffSummary"></div>
+                
+                <h3 style="margin-top: 40px; margin-bottom: 20px;">История списаний</h3>
+                <div id="writeoffHistory"></div>
+            </div>
+
+            <!-- Инвентаризация -->
+            <div id="inventory" class="tab-content">
+                <h2>Инвентаризация</h2>
+                <p style="margin-bottom: 20px; color: #6c757d;">Сканируйте товары для подсчета фактических остатков</p>
+                <button class="btn btn-primary" onclick="startInventory()">Начать инвентаризацию</button>
+                <div id="inventoryHistory" style="margin-top: 30px;"></div>
+            </div>
+
+            <!-- Отчеты -->
+            <div id="reports" class="tab-content">
+                <h2>Отчеты и статистика</h2>
+                <div class="stats" id="statsCards"></div>
+                <h3>История операций</h3>
+                <div id="operationsHistory"></div>
+            </div>
+
+            <!-- Настройки -->
+            <div id="settings" class="tab-content">
+                <h2>Настройки полей товаров</h2>
+                <p style="margin-bottom: 20px; color: #6c757d;">Настройте поля, которые будут использоваться для всех товаров</p>
+                
+                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 30px;">
+                    <h3 style="margin-bottom: 15px;">Пользовательские поля товаров</h3>
+                    <div id="productFieldsList"></div>
+                    <button class="btn btn-secondary" onclick="addProductFieldSetting()">+ Добавить поле</button>
+                    <button class="btn btn-success" onclick="saveProductFieldsSettings()" style="margin-left: 10px;">💾 Сохранить настройки</button>
+                </div>
+
+                <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107;">
+                    <strong>⚠️ Внимание:</strong> Изменение настроек полей повлияет на все существующие и новые товары.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для добавления товара -->
+    <div id="productModal" class="modal">
+        <div class="modal-content">
+            <h2 id="productModalTitle">Добавить товар</h2>
+            <input type="hidden" id="productId" value="">
+            <div class="form-group">
+                <label>SKU (Артикул)*</label>
+                <input type="text" id="productSKU" placeholder="Например: PROD-001">
+                <small style="color: #6c757d; display: block; margin-top: 5px;">
+                    💡 Уникальный артикул товара для внутреннего учета
+                </small>
+            </div>
+            <div class="form-group">
+                <label>Название*</label>
+                <input type="text" id="productName">
+            </div>
+            <div class="form-group">
+                <label>Количество</label>
+                <input type="number" id="productQuantity" value="0" min="0">
+            </div>
+            <div class="form-group">
+                <label>Описание</label>
+                <textarea id="productDescription" rows="3"></textarea>
+            </div>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+                <h3 style="margin-bottom: 15px;">Дополнительные поля</h3>
+                <div id="customFieldsList"></div>
+                <small style="color: #6c757d; display: block; margin-top: 10px;">
+                    💡 Состав полей настраивается в разделе "Настройки"
+                </small>
+            </div>
+            <div id="modalAlert"></div>
+            <button class="btn btn-primary" onclick="saveProduct()">Сохранить</button>
+            <button class="btn btn-secondary" onclick="closeModal()">Отмена</button>
+        </div>
+    </div>
+
+    <!-- Модальное окно импорта из Excel -->
+    <div id="importModal" class="modal">
+        <div class="modal-content" style="max-width: 1000px; max-height: 90vh; overflow-y: auto;">
+            <h2>📥 Импорт товаров из Excel</h2>
+            
+            <!-- Шаг 1: Загрузка файла -->
+            <div id="importStep1" style="display: block;">
+                <p style="color: #6c757d; margin-bottom: 20px;">Перетащите файл Excel (.xlsx) или нажмите для выбора</p>
+                
+                <div id="dropZone" style="border: 3px dashed #667eea; border-radius: 10px; padding: 60px; text-align: center; background: #f8f9fa; cursor: pointer; transition: all 0.3s;">
+                    <div style="font-size: 48px; margin-bottom: 15px;">📁</div>
+                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 10px;">Перетащите файл сюда</div>
+                    <div style="color: #6c757d;">или нажмите для выбора</div>
+                    <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;">
+                </div>
+                
+                <div id="fileInfo" style="margin-top: 20px; display: none;"></div>
+            </div>
+            
+            <!-- Шаг 2: Маппинг полей -->
+            <div id="importStep2" style="display: none;">
+                <h3>Настройка соответствия полей</h3>
+                <p style="color: #6c757d; margin-bottom: 20px;">Укажите какие колонки из Excel соответствуют полям товаров</p>
+                
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                        <input type="checkbox" id="skipFirstRow" checked style="width: 20px; height: 20px;">
+                        <span style="font-weight: 600;">Пропустить первую строку (заголовки)</span>
+                    </label>
+                </div>
+                
+                <div id="mappingContainer" style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;"></div>
+                
+                <h3>Предварительный просмотр</h3>
+                <p style="color: #6c757d; margin-bottom: 15px;">Первые 5 строк для импорта:</p>
+                <div id="previewContainer" style="overflow-x: auto; margin-bottom: 20px;"></div>
+                
+                <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; margin-bottom: 20px;">
+                    <div id="importSummary"></div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <button id="importNextBtn" class="btn btn-primary" onclick="processImportFile()" style="display: none;">
+                    Далее →
+                </button>
+                <button id="importExecuteBtn" class="btn btn-success" onclick="executeImport()" style="display: none;">
+                    ✅ Импортировать товары
+                </button>
+                <button class="btn btn-secondary" onclick="closeImportModal()">
+                    Отмена
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно инвентаризации -->
+    <div id="inventoryModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h2>🔍 Инвентаризация склада</h2>
+            <p style="color: #6c757d; margin-bottom: 20px;">Отсканируйте штрихкоды товаров. Каждое сканирование увеличивает счетчик.</p>
+            
+            <div class="form-group">
+                <label style="font-size: 18px;">Сканировать штрихкод:</label>
+                <input type="text" id="scanInput" placeholder="Нажмите здесь и сканируйте..." 
+                    style="font-size: 18px; padding: 15px; border: 3px solid #667eea;" autofocus>
+                <small style="color: #6c757d; display: block; margin-top: 5px;">
+                    💡 Поле автоматически очищается после сканирования. Можно вводить вручную и нажимать Enter.
+                </small>
+            </div>
+
+            <div id="scanAlert" style="margin: 15px 0;"></div>
+
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-bottom: 15px;">Отсканировано позиций: <span id="scannedCount">0</span></h3>
+                <div id="scannedItems" style="max-height: 400px; overflow-y: auto;"></div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn btn-success" onclick="completeInventory()" style="font-size: 16px; padding: 15px 30px;">
+                    ✅ Завершить и применить остатки
+                </button>
+                <button class="btn btn-secondary" onclick="cancelInventory()" style="font-size: 16px; padding: 15px 30px;">
+                    ❌ Отменить
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно прихода товаров -->
+    <div id="receiptModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <h2 id="receiptModalTitle">📦 Приход товаров</h2>
+            <input type="hidden" id="receiptId" value="">
+            
+            <div class="form-group">
+                <label>Дата прихода*</label>
+                <input type="date" id="receiptDate" style="max-width: 200px;">
+            </div>
+            
+            <p style="color: #6c757d; margin-bottom: 20px;">Найдите товары по SKU и укажите количество для прихода</p>
+            
+            <div class="form-group">
+                <label style="font-size: 16px;">Найти товар по SKU или названию:</label>
+                <input type="text" id="receiptSearchInput" placeholder="Введите SKU или название товара..." 
+                    style="font-size: 16px; padding: 12px;">
+                <div id="receiptSearchResults" style="max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
+            </div>
+
+            <div id="receiptAlert" style="margin: 15px 0;"></div>
+
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-bottom: 15px;">Товары в приходе: <span id="receiptItemsCount">0</span></h3>
+                <div id="receiptItems" style="max-height: 400px; overflow-y: auto;"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Примечание к приходу</label>
+                <textarea id="receiptNote" rows="3" placeholder="Необязательно..."></textarea>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn btn-success" onclick="completeReceipt()" style="font-size: 16px; padding: 15px 30px;">
+                    ✅ Провести приход
+                </button>
+                <button class="btn btn-secondary" onclick="cancelReceipt()" style="font-size: 16px; padding: 15px 30px;">
+                    ❌ Отменить
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно отгрузки товаров -->
+    <div id="shipmentModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <h2 id="shipmentModalTitle">📤 Отгрузка товаров</h2>
+            <input type="hidden" id="shipmentId" value="">
+            
+            <div class="form-group">
+                <label>Дата отгрузки*</label>
+                <input type="date" id="shipmentDate" style="max-width: 200px;">
+            </div>
+            
+            <p style="color: #6c757d; margin-bottom: 20px;">Найдите товары по SKU и укажите количество для отгрузки</p>
+            
+            <div class="form-group">
+                <label style="font-size: 16px;">Найти товар по SKU или названию:</label>
+                <input type="text" id="shipmentSearchInput" placeholder="Введите SKU или название товара..." 
+                    style="font-size: 16px; padding: 12px;">
+                <div id="shipmentSearchResults" style="max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
+            </div>
+
+            <div id="shipmentAlert" style="margin: 15px 0;"></div>
+
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-bottom: 15px;">Товары в отгрузке: <span id="shipmentItemsCount">0</span></h3>
+                <div id="shipmentItems" style="max-height: 400px; overflow-y: auto;"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Примечание к отгрузке</label>
+                <textarea id="shipmentNote" rows="3" placeholder="Необязательно..."></textarea>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn btn-danger" onclick="completeShipment()" style="font-size: 16px; padding: 15px 30px;">
+                    ✅ Провести отгрузку
+                </button>
+                <button class="btn btn-secondary" onclick="cancelShipment()" style="font-size: 16px; padding: 15px 30px;">
+                    ❌ Отменить
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно списания товаров -->
+    <div id="writeoffModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <h2>📝 Списание товаров</h2>
+            
+            <div class="form-group">
+                <label>Дата списания*</label>
+                <input type="date" id="writeoffDate" style="max-width: 200px;">
+            </div>
+            
+            <p style="color: #6c757d; margin-bottom: 20px;">Выберите товары и укажите количество и причину списания</p>
+            
+            <div class="form-group">
+                <label style="font-size: 16px;">Найти товар по SKU или названию:</label>
+                <input type="text" id="writeoffSearchInput" placeholder="Введите SKU или название товара..." 
+                    oninput="searchWriteoffProduct()"
+                    style="font-size: 16px; padding: 12px;">
+                <div id="writeoffSearchResults" style="max-height: 200px; overflow-y: auto; margin-top: 10px;"></div>
+            </div>
+
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                <h3 style="margin-bottom: 15px;">Товары к списанию: <span id="writeoffItemsCount">0</span></h3>
+                <div id="writeoffItems" style="max-height: 400px; overflow-y: auto;"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Общее примечание</label>
+                <textarea id="writeoffNote" rows="3" placeholder="Необязательно..."></textarea>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn btn-warning" onclick="completeWriteoff()" style="font-size: 16px; padding: 15px 30px;">
+                    ✅ Провести списание
+                </button>
+                <button class="btn btn-secondary" onclick="cancelWriteoff()" style="font-size: 16px; padding: 15px 30px;">
+                    ❌ Отменить
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- jsPDF библиотека для генерации PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <!-- SheetJS библиотека для работы с Excel -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    
+    <!-- DataTables Buttons -->
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/dataTables.buttons.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.html5.min.js"></script>
+    <script src="https://cdn.datatables.net/buttons/2.4.2/js/buttons.print.min.js"></script>
+    
+    <!-- DataTables ColReorder -->
+    <script src="https://cdn.datatables.net/colreorder/1.7.0/js/dataTables.colReorder.min.js"></script>
+    
+    <script src="app.js"></script>
+</body>
+</html>
