@@ -43,7 +43,7 @@ class OperationService(
         val params = mutableListOf<Any>()
 
         if (type != null) {
-            whereParts += "o.type = ?"
+            whereParts += "type = ?"
             params += type
         }
 
@@ -51,15 +51,15 @@ class OperationService(
         if (type == "shipment" && sk in listOf("fbs", "fbo", "manual")) {
             when (sk) {
                 "fbs" -> {
-                    whereParts += "o.note ILIKE ?"
+                    whereParts += "note ILIKE ?"
                     params += "OZON FBS%"
                 }
                 "fbo" -> {
-                    whereParts += "o.note ILIKE ?"
+                    whereParts += "note ILIKE ?"
                     params += "OZON FBO%"
                 }
                 "manual" -> {
-                    whereParts += "(o.note IS NULL OR (o.note NOT ILIKE ? AND o.note NOT ILIKE ?))"
+                    whereParts += "(note IS NULL OR (note NOT ILIKE ? AND note NOT ILIKE ?))"
                     params += "OZON FBS%"
                     params += "OZON FBO%"
                 }
