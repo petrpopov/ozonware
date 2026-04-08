@@ -1,7 +1,9 @@
 package com.ozonware.config
 
 import org.springframework.boot.context.properties.ConfigurationProperties
+import org.springframework.stereotype.Component
 
+@Component
 @ConfigurationProperties(prefix = "ozon")
 data class OzonProperties(
     val requestPauseMs: Long = 1500,
