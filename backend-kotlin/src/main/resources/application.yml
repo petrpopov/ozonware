@@ -1,10 +1,14 @@
 spring:
+  profiles:
+    active: dev
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:4432}/${DB_NAME:openws}
-    username: ${DB_USER:warehouse_user}
-    password: ${DB_PASSWORD:warehouse_password}
     hikari:
       maximum-pool-size: 10
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    out-of-order: true
   jpa:
     hibernate:
       ddl-auto: validate
@@ -17,6 +21,16 @@ spring:
 
 server:
   port: ${PORT:19090}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:postgresql://localhost:4432/openws
+    username: warehouse_user
+    password: warehouse_password
 
 ozon:
   request-pause-ms: ${OZON_REQUEST_PAUSE_MS:1500}
