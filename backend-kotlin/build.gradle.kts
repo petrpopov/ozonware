@@ -23,6 +23,7 @@ dependencies {
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 
     runtimeOnly("org.postgresql:postgresql")
+    implementation("org.flywaydb:flyway-database-postgresql")
     implementation("io.hypersistence:hypersistence-utils-hibernate-63:3.9.0")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
