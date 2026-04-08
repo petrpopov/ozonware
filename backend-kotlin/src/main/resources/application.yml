@@ -1,0 +1,45 @@
+spring:
+  profiles:
+    active: dev
+  datasource:
+    hikari:
+      maximum-pool-size: 10
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+    out-of-order: true
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+        format_sql: false
+
+server:
+  port: ${PORT:19090}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:postgresql://localhost:4432/openws
+    username: warehouse_user
+    password: warehouse_password
+
+ozon:
+  request-pause-ms: ${OZON_REQUEST_PAUSE_MS:1500}
+  api-url: https://api-seller.ozon.ru/v3/posting/fbs/list
+  fbo-list-url: https://api-seller.ozon.ru/v3/supply-order/list
+  fbo-get-url: https://api-seller.ozon.ru/v3/supply-order/get
+  fbo-bundle-url: https://api-seller.ozon.ru/v1/supply-order/bundle
+  product-list-url: https://api-seller.ozon.ru/v3/product/list
+  product-attributes-url: https://api-seller.ozon.ru/v4/product/info/attributes
+
+google:
+  service-account-key: ${GOOGLE_SERVICE_ACCOUNT_KEY:google-credentials.json}
