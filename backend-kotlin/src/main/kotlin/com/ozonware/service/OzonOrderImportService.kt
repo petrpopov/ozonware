@@ -27,7 +27,7 @@ class OzonOrderImportService(
 ) {
 
     @Transactional
-    fun importRows(body: Map<String, Any?>): Map<String, Any> {
+    fun importRows(body: Map<String, Any?>): Map<String, Any?> {
         val source = (body["source"] as? String)?.trim()
         if (source !in listOf("fbs_csv", "fbo_csv")) {
             throw BadRequestException("Invalid source. Use fbs_csv or fbo_csv")
@@ -42,7 +42,7 @@ class OzonOrderImportService(
         val fileName = body["file_name"] as? String
 
         val batch = OzonOrderImportBatch(
-            source = source,
+            source = source!!,
             fileName = fileName,
             importedAt = LocalDateTime.now(),
             rowsTotal = rows.size
@@ -107,7 +107,7 @@ class OzonOrderImportService(
 
             if (existingLine != null) {
                 existingLine.batchId = batch.id
-                existingLine.source = source
+                existingLine.source = source!!
                 existingLine.orderNumber = getCell(rawRow, "Номер заказа")
                 existingLine.postingNumber = postingNumber
                 existingLine.acceptedAt = parseDateTime(getCell(rawRow, "Принят в обработку"))
@@ -140,7 +140,7 @@ class OzonOrderImportService(
                 val line = OzonOrderLine(
                     externalLineKey = externalKey,
                     batchId = batch.id,
-                    source = source,
+                    source = source!!,
                     orderNumber = getCell(rawRow, "Номер заказа"),
                     postingNumber = postingNumber,
                     acceptedAt = parseDateTime(getCell(rawRow, "Принят в обработку")),
@@ -228,7 +228,7 @@ class OzonOrderImportService(
         )
     }
 
-    fun getProductTimeline(productId: Long, limit: String? = null, offset: String? = null, all: Boolean = false): Map<String, Any> {
+    fun getProductTimeline(productId: Long, limit: String? = null, offset: String? = null, all: Boolean = false): Map<String, Any?> {
         val orderLines = orderLineRepository.findAllByProductId(productId)
 
         val movements = orderLines.map { row ->
@@ -247,9 +247,9 @@ class OzonOrderImportService(
                 "offer_id" to row.offerId,
                 "ozon_sku" to row.ozonSku
             )
-        }
+        }.toMutableList()
 
-        movements.sortByDescending { it["event_time"]?.toString() ?: "" }
+        movements.sortByDescending { m -> m["event_time"]?.toString() ?: "" }
         val total = movements.size
         val actualLimit = if (all) Int.MAX_VALUE else maxOf(1, minOf(500, limit?.toIntOrNull() ?: 200))
         val actualOffset = maxOf(0, offset?.toIntOrNull() ?: 0)
@@ -313,13 +313,13 @@ class OzonOrderImportService(
             "revenue_gross" to revenueGross.toDouble().toBigDecimal().setScale(2, java.math.RoundingMode.HALF_UP).toDouble(),
             "revenue_paid" to revenuePaid.toDouble().toBigDecimal().setScale(2, java.math.RoundingMode.HALF_UP).toDouble(),
             "by_source" to mapOf(
-                "fbs_csv" to mapOf(
+                "fbs_csv" to mapOf<String, Any>(
                     "units" to (fbsUnits["units"] ?: 0),
-                    "postings" to fbsPostings["postings"]?.size ?: 0
+                    "postings" to (fbsPostings["postings"]?.size ?: 0)
                 ),
-                "fbo_csv" to mapOf(
+                "fbo_csv" to mapOf<String, Any>(
                     "units" to (fboUnits["units"] ?: 0),
-                    "postings" to fboPostings["postings"]?.size ?: 0
+                    "postings" to (fboPostings["postings"]?.size ?: 0)
                 )
             )
         )

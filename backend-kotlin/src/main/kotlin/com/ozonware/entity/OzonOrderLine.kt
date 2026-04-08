@@ -96,7 +96,7 @@ data class OzonOrderLine(
 
     @Type(JsonType::class)
     @Column(columnDefinition = "jsonb", nullable = false)
-    var raw: Map<String, Any> = emptyMap(),
+    var raw: Map<String, Any?> = emptyMap(),
 
     @Column(name = "created_at", nullable = false)
     var createdAt: LocalDateTime = LocalDateTime.now(),

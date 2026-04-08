@@ -23,7 +23,7 @@ class StatsController(
     }
 
     @GetMapping("/writeoffs/summary")
-    fun getWriteoffsSummary(): ResponseEntity<List<Map<String, Any>>> {
+    fun getWriteoffsSummary(): ResponseEntity<List<Map<String, Any?>>> {
         return ResponseEntity.ok(statsService.getWriteoffsSummary())
     }
 }

@@ -213,7 +213,7 @@ class OzonService(
                 }
             }
 
-            sendFbsProgress("processing", "Загружено ${allPostings.size()} заказов. Обработка...")
+            sendFbsProgress("loading", "Загружено ${allPostings.size} заказов. Обработка...")
 
             val validPostings = filterAndDeduplicate(allPostings)
 
@@ -284,7 +284,7 @@ class OzonService(
         return if (existing.isPresent) {
             val p = existing.get()
             p.status = status
-            p.rawData = objectMapper.convertValue(posting, Map::class.java) as Map<String, Any>
+            p.rawData = objectMapper.convertValue(posting, Map::class.java) as Map<String, Any?>
             p.updatedAt = LocalDateTime.now()
             ozonPostingRepository.save(p).id!!
         } else {
@@ -293,7 +293,7 @@ class OzonService(
                 orderNumber = orderNumber,
                 status = status,
                 inProcessAt = inProcessAt?.let { parseTimestamp(it) },
-                rawData = objectMapper.convertValue(posting, Map::class.java) as Map<String, Any>
+                rawData = objectMapper.convertValue(posting, Map::class.java) as Map<String, Any?>
             )
             ozonPostingRepository.save(p).id!!
         }
@@ -493,8 +493,8 @@ class OzonService(
             s.warehouseId = supply["warehouse_id"] as? Long
             s.warehouseName = supply["warehouse_name"] as? String
             s.warehouseAddress = supply["warehouse_address"] as? String
-            s.rawOrder = supply["raw_order"] as? Map<String, Any> ?: emptyMap()
-            s.rawSupply = supply["raw_supply"] as? Map<String, Any> ?: emptyMap()
+            s.rawOrder = supply["raw_order"]?.let { @Suppress("UNCHECKED_CAST") it as Map<String, Any?> } ?: emptyMap()
+            s.rawSupply = supply["raw_supply"]?.let { @Suppress("UNCHECKED_CAST") it as Map<String, Any?> } ?: emptyMap()
             s.updatedAt = LocalDateTime.now()
             ozonFboSupplyRepository.save(s).id!!
         } else {
@@ -510,8 +510,8 @@ class OzonService(
                 warehouseId = supply["warehouse_id"] as? Long,
                 warehouseName = supply["warehouse_name"] as? String,
                 warehouseAddress = supply["warehouse_address"] as? String,
-                rawOrder = supply["raw_order"] as? Map<String, Any> ?: emptyMap(),
-                rawSupply = supply["raw_supply"] as? Map<String, Any> ?: emptyMap()
+                rawOrder = supply["raw_order"]?.let { @Suppress("UNCHECKED_CAST") it as Map<String, Any?> } ?: emptyMap(),
+                rawSupply = supply["raw_supply"]?.let { @Suppress("UNCHECKED_CAST") it as Map<String, Any?> } ?: emptyMap()
             )
             ozonFboSupplyRepository.save(s).id!!
         }
@@ -695,7 +695,7 @@ class OzonService(
         )
 
         return if (idx >= 0) {
-            normalized[idx] = normalized[idx] + nextField
+            normalized[idx] = nextField
             normalized
         } else {
             normalized + nextField
@@ -705,7 +705,7 @@ class OzonService(
     // ── Shipment creation ──
 
     @Transactional
-    fun createShipments(selectedDays: List<String>? = null): Map<String, Any> {
+    fun createShipments(selectedDays: List<String>? = null): Map<String, Any?> {
         // Load daily stats
         val groupedByDay = loadDailyStats()
 
@@ -715,7 +715,7 @@ class OzonService(
             groupedByDay
         }
 
-        val results = mutableListOf<Map<String, Any>>()
+        val results = mutableListOf<Map<String, Any?>>()
 
         for (day in daysToProcess) {
             val dayStr = day["day"] as String
@@ -843,7 +843,7 @@ class OzonService(
         )
     }
 
-    private fun loadDailyStats(): List<Map<String, Any>> {
+    private fun loadDailyStats(): List<Map<String, Any?>> {
         val ordersData = entityManager.createNativeQuery(
             """SELECT op.id, op.posting_number, op.status,
                   (op.in_process_at AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')::date AS day,
@@ -854,19 +854,19 @@ class OzonService(
         @Suppress("UNCHECKED_CAST")
         val rows = ordersData as List<Array<Any?>>
 
-        val groupedByDay = mutableListOf<MutableMap<String, Any>>()
-        val dayMap = mutableMapOf<String, MutableMap<String, Any>>()
+        val groupedByDay = mutableListOf<MutableMap<String, Any?>>()
+        val dayMap = mutableMapOf<String, MutableMap<String, Any?>>()
 
         for (row in rows) {
             val day = (row[3] as? java.time.LocalDate)?.toString() ?: continue
 
             val dayGroup = dayMap.getOrPut(day) {
-                val group = mutableMapOf<String, Any>(
-                    "id" to (row[0] as? Number)?.toLong() ?: 0L,
+                val group = mutableMapOf<String, Any?>(
+                    "id" to ((row[0] as? Number)?.toLong() ?: 0L) as Any?,
                     "day" to day,
-                    "orders" to mutableListOf<Map<String, Any>>(),
+                    "orders" to mutableListOf<Map<String, Any?>>(),
                     "orderCount" to 0,
-                    "items" to mutableListOf<MutableMap<String, Any>>(),
+                    "items" to mutableListOf<MutableMap<String, Any?>>(),
                     "itemsCount" to 0,
                     "skuCount" to 0
                 )
@@ -875,13 +875,13 @@ class OzonService(
             }
 
             @Suppress("UNCHECKED_CAST")
-            val rawData = row[4] as? Map<String, Any>
+            val rawData = row[4] as? Map<String, Any?>
             val products = rawData?.get("products") as? List<*> ?: emptyList<Any>()
 
-            val order = mutableMapOf<String, Any>(
-                "posting_number" to (row[1] as? String) ?: "",
-                "status" to (row[2] as? String) ?: "",
-                "items" to mutableListOf<Map<String, Any>>(),
+            val order = mutableMapOf<String, Any?>(
+                "posting_number" to ((row[1] as? String) ?: "") as Any?,
+                "status" to ((row[2] as? String) ?: "") as Any?,
+                "items" to mutableListOf<Map<String, Any?>>(),
                 "itemCount" to 0
             )
 
@@ -891,22 +891,23 @@ class OzonService(
                 val sku = "OZN${product["sku"]}"
                 val qty = (product["quantity"] as? Number)?.toInt() ?: 0
 
-                order["items"] += mapOf(
+                val orderItems = order["items"] as MutableList<Map<String, Any?>>
+                orderItems += mapOf<String, Any?>(
                     "sku" to sku,
                     "quantity" to qty,
-                    "name" to (product["name"] as? String) ?: "",
-                    "offer_id" to (product["offer_id"] as? String) ?: ""
+                    "name" to ((product["name"] as? String) ?: "") as Any?,
+                    "offer_id" to ((product["offer_id"] as? String) ?: "") as Any?
                 )
                 order["itemCount"] = (order["itemCount"] as Int) + qty
 
                 @Suppress("UNCHECKED_CAST")
-                val dayItems = dayGroup["items"] as MutableList<MutableMap<String, Any>>
+                val dayItems = dayGroup["items"] as MutableList<MutableMap<String, Any?>>
                 var dayItem = dayItems.find { it["sku"] == sku }
                 if (dayItem == null) {
-                    dayItem = mutableMapOf(
+                    dayItem = mutableMapOf<String, Any?>(
                         "sku" to sku,
-                        "name" to (product["name"] as? String) ?: "",
-                        "offer_id" to (product["offer_id"] as? String) ?: "",
+                        "name" to ((product["name"] as? String) ?: "") as Any?,
+                        "offer_id" to ((product["offer_id"] as? String) ?: "") as Any?,
                         "quantity" to 0,
                         "orders" to mutableListOf<String>()
                     )
@@ -914,20 +915,20 @@ class OzonService(
                 }
                 dayItem["quantity"] = (dayItem["quantity"] as Int) + qty
                 @Suppress("UNCHECKED_CAST")
-                val orders = dayItem["orders"] as MutableList<String>
-                if ((row[1] as? String) !in orders) {
-                    orders += (row[1] as? String) ?: ""
+                val dayOrders = dayItem["orders"] as MutableList<String>
+                if ((row[1] as? String) !in dayOrders) {
+                    dayOrders += (row[1] as? String) ?: ""
                 }
             }
 
             @Suppress("UNCHECKED_CAST")
-            (dayGroup["orders"] as MutableList<Map<String, Any>>) += order
+            (dayGroup["orders"] as MutableList<Map<String, Any?>>) += order
             dayGroup["orderCount"] = (dayGroup["orderCount"] as Int) + 1
         }
 
         for (dayGroup in groupedByDay) {
             @Suppress("UNCHECKED_CAST")
-            val items = dayGroup["items"] as List<Map<String, Any>>
+            val items = dayGroup["items"] as List<Map<String, Any?>>
             dayGroup["itemsCount"] = items.sumOf { (it["quantity"] as? Int) ?: 0 }
             dayGroup["skuCount"] = items.size
         }
@@ -935,7 +936,7 @@ class OzonService(
         return groupedByDay
     }
 
-    private fun findExistingFbsOperation(day: String): Map<String, Any>? {
+    private fun findExistingFbsOperation(day: String): Map<String, Any?>? {
         val result = entityManager.createNativeQuery(
             """SELECT * FROM operations WHERE type = 'shipment' AND operation_date = ?::date AND note LIKE 'OZON FBS от %' ORDER BY id DESC LIMIT 1"""
         ).setParameter(1, day).resultList
@@ -945,9 +946,9 @@ class OzonService(
         if (rows.isEmpty()) return null
 
         val row = rows[0]
-        return mapOf(
-            "id" to (row[0] as? Number)?.toLong() ?: 0L,
-            "items" to emptyList<Map<String, Any>>() // would need JSON parsing
+        return mapOf<String, Any?>(
+            "id" to ((row[0] as? Number)?.toLong() ?: 0L) as Any?,
+            "items" to emptyList<Map<String, Any?>>()
         )
     }
 

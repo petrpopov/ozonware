@@ -47,11 +47,11 @@ data class OzonFboSupply(
 
     @Type(JsonType::class)
     @Column(name = "raw_order", columnDefinition = "jsonb")
-    var rawOrder: Map<String, Any> = emptyMap(),
+    var rawOrder: Map<String, Any?> = emptyMap(),
 
     @Type(JsonType::class)
     @Column(name = "raw_supply", columnDefinition = "jsonb")
-    var rawSupply: Map<String, Any> = emptyMap(),
+    var rawSupply: Map<String, Any?> = emptyMap(),
 
     @Column(name = "shipment_applied")
     var shipmentApplied: Boolean = false,

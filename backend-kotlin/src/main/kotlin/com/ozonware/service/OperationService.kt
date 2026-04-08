@@ -288,8 +288,8 @@ class OperationService(
 
             preparedItems += mapOf<String, Any?>(
                 "productId" to productId,
-                "productName" to item["productName"] ?: prodName,
-                "productSKU" to item["productSKU"] ?: prodSku,
+                "productName" to (item["productName"] ?: prodName) as Any?,
+                "productSKU" to (item["productSKU"] ?: prodSku) as Any?,
                 "quantity" to requestQty,
                 "appliedQuantity" to appliedQty
             )
@@ -339,7 +339,9 @@ class OperationService(
         }
 
         val refreshedOp = operationRepository.findById(shipmentOp.id!!).get()
-        return operationToMap(refreshedOp) + ("correction_operation_id" to correctionOperationId)
+        val result = operationToMap(refreshedOp).toMutableMap()
+        result["correction_operation_id"] = correctionOperationId
+        return result
     }
 
     @Transactional(rollbackFor = [Exception::class])
@@ -471,8 +473,8 @@ class OperationService(
 
             preparedItems += mapOf<String, Any?>(
                 "productId" to productId,
-                "productName" to item["productName"] ?: prodName,
-                "productSKU" to item["productSKU"] ?: prodSku,
+                "productName" to (item["productName"] ?: prodName) as Any?,
+                "productSKU" to (item["productSKU"] ?: prodSku) as Any?,
                 "quantity" to requestQty,
                 "appliedQuantity" to appliedQty
             )
@@ -517,7 +519,9 @@ class OperationService(
         }
 
         val refreshed = operationRepository.findById(oldOp.id!!).get()
-        return operationToMap(refreshed) + ("correction_operation_id" to correctionOperationId)
+        val result = operationToMap(refreshed).toMutableMap()
+        result["correction_operation_id"] = correctionOperationId
+        return result
     }
 
     @Transactional(rollbackFor = [Exception::class])

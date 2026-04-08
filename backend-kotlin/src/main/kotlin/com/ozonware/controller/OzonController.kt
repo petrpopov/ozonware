@@ -26,7 +26,7 @@ class OzonController(
     }
 
     @PostMapping("/settings")
-    fun saveSettings(@RequestBody settings: Map<String, Any?>): ResponseEntity<Map<String, Boolean>> {
+    fun saveSettings(@RequestBody settings: Map<String, Any?>): ResponseEntity<Map<String, Any>> {
         return try {
             settingsService.saveSetting("ozon_settings", settings)
             ResponseEntity.ok(mapOf("success" to true))
@@ -103,7 +103,7 @@ class OzonController(
     }
 
     @PostMapping("/shipments")
-    fun createShipments(@RequestBody body: Map<String, Any?>?): ResponseEntity<Map<String, Any>> {
+    fun createShipments(@RequestBody body: Map<String, Any?>?): ResponseEntity<Map<String, Any?>> {
         return try {
             val days = body?.get("days") as? List<String>
             val result = ozonService.createShipments(days)

@@ -44,7 +44,7 @@ class StatsService(
         }
     }
 
-    fun getWriteoffsSummary(): List<Map<String, Any>> {
+    fun getWriteoffsSummary(): List<Map<String, Any?>> {
         @Suppress("UNCHECKED_CAST")
         val rawResult = writeoffRepository.findSummary() as List<Map<String, Any>>
         return rawResult.map { row ->

@@ -26,7 +26,7 @@ data class OzonPosting(
 
     @Type(JsonType::class)
     @Column(name = "raw_data", columnDefinition = "jsonb")
-    var rawData: Map<String, Any> = emptyMap(),
+    var rawData: Map<String, Any?> = emptyMap(),
 
     @Column(nullable = false)
     var shipped: Boolean = false,

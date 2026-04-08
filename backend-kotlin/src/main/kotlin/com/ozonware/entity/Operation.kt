@@ -24,14 +24,14 @@ data class Operation(
 
     @Type(JsonType::class)
     @Column(columnDefinition = "jsonb")
-    var items: List<Map<String, Any>> = emptyList(),
+    var items: List<Map<String, Any?>> = emptyList(),
 
     @Column(name = "total_quantity")
     var totalQuantity: Int = 0,
 
     @Type(JsonType::class)
     @Column(columnDefinition = "jsonb")
-    var differences: List<Map<String, Any>> = emptyList(),
+    var differences: List<Map<String, Any?>> = emptyList(),
 
     @Column(name = "created_at")
     var createdAt: LocalDateTime? = null,
