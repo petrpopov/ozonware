@@ -1,0 +1,21 @@
+node_modules/
+.env
+npm-debug.log
+.DS_Store
+*.log
+
+# Database data and backups
+postgres_data/
+postgres-data/
+backup/
+database/backups/
+database/backup_*.sql
+
+# Secrets
+backend/google-credentials.json
+
+# Build output
+frontend/dist/
+
+# IDE
+.idea/

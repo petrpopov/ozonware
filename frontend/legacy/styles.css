@@ -1,0 +1,1827 @@
+/* ============================================
+   WAREHOUSE SYSTEM 2025 - MODERN DESIGN
+   Light/Dark Theme Support + Mobile Adaptive
+   ============================================ */
+
+:root {
+    /* Light Theme Colors */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f8f9fa;
+    --bg-tertiary: #e9ecef;
+    --text-primary: #1a202c;
+    --text-secondary: #4a5568;
+    --text-tertiary: #718096;
+    --border-color: #e2e8f0;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.15);
+    
+    /* Brand Colors */
+    --primary: #667eea;
+    --primary-hover: #5a67d8;
+    --primary-light: #e8eaf6;
+    --success: #48bb78;
+    --success-hover: #38a169;
+    --success-light: #c6f6d5;
+    --danger: #f56565;
+    --danger-hover: #e53e3e;
+    --danger-light: #fed7d7;
+    --warning: #ed8936;
+    --warning-hover: #dd6b20;
+    --warning-light: #feebc8;
+    --info: #4299e1;
+    
+    /* Spacing */
+    --spacing-xs: 4px;
+    --spacing-sm: 8px;
+    --spacing-md: 16px;
+    --spacing-lg: 24px;
+    --spacing-xl: 32px;
+    --spacing-2xl: 48px;
+    
+    /* Border Radius */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 16px;
+    --radius-xl: 24px;
+    --radius-full: 9999px;
+    
+    /* Transitions */
+    --transition-fast: 150ms ease;
+    --transition-base: 250ms ease;
+    --transition-slow: 350ms ease;
+}
+
+[data-theme="dark"] {
+    --bg-primary: #1a202c;
+    --bg-secondary: #2d3748;
+    --bg-tertiary: #4a5568;
+    --text-primary: #f7fafc;
+    --text-secondary: #e2e8f0;
+    --text-tertiary: #cbd5e0;
+    --border-color: #4a5568;
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.3);
+    --shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.4);
+    
+    --primary-light: #2d3748;
+    --success-light: #2d3748;
+    --danger-light: #2d3748;
+    --warning-light: #2d3748;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    line-height: 1.6;
+    transition: background-color var(--transition-base), color var(--transition-base);
+    overflow-x: hidden;
+}
+
+/* ========== CONTAINER ========== */
+.container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: var(--spacing-md);
+}
+
+@media (min-width: 768px) {
+    .container {
+        padding: var(--spacing-lg) var(--spacing-md);
+    }
+}
+
+@media (min-width: 1920px) {
+    .container {
+        max-width: 1800px;
+    }
+}
+
+/* ========== HEADER ========== */
+.header {
+    background: var(--bg-primary);
+    padding: var(--spacing-lg) var(--spacing-xl);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    margin-bottom: var(--spacing-xl);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--spacing-md);
+}
+
+.header h1 {
+    font-size: clamp(1.5rem, 4vw, 2.5rem);
+    font-weight: 700;
+    background: linear-gradient(135deg, var(--primary), #4299e1);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.header p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-top: var(--spacing-xs);
+}
+
+/* ========== THEME TOGGLE ========== */
+.theme-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    background: var(--bg-secondary);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-full);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    border: 2px solid var(--border-color);
+}
+
+.theme-toggle:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.theme-toggle-icon {
+    font-size: 1.25rem;
+    transition: transform var(--transition-base);
+}
+
+.theme-toggle:hover .theme-toggle-icon {
+    transform: rotate(180deg);
+}
+
+/* ========== TABS ========== */
+.tabs {
+    display: flex;
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-sm);
+    gap: var(--spacing-sm);
+    box-shadow: var(--shadow-md);
+    margin-bottom: var(--spacing-xl);
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.tabs::-webkit-scrollbar {
+    height: 6px;
+}
+
+.tabs::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-sm);
+}
+
+.tabs::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: var(--radius-sm);
+}
+
+.tab {
+    padding: var(--spacing-md) var(--spacing-lg);
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-base);
+    white-space: nowrap;
+    position: relative;
+}
+
+.tab:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    transform: translateY(-2px);
+}
+
+.tab.active {
+    background: var(--primary);
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 50%;
+    height: 3px;
+    background: var(--primary);
+    border-radius: var(--radius-full);
+}
+
+@media (max-width: 768px) {
+    .tab {
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 0.85rem;
+    }
+}
+
+/* ========== CONTENT ========== */
+.content {
+    background: var(--bg-primary);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-xl);
+    box-shadow: var(--shadow-md);
+    min-height: 400px;
+}
+
+@media (max-width: 768px) {
+    .content {
+        padding: var(--spacing-md);
+    }
+}
+
+.tab-content {
+    display: none;
+    animation: fadeIn var(--transition-base);
+}
+
+.tab-content.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ========== BUTTONS ========== */
+.btn {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-base);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    box-shadow: var(--shadow-sm);
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn:active {
+    transform: translateY(0);
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+}
+
+.btn-success {
+    background: var(--success);
+    color: white;
+}
+
+.btn-success:hover {
+    background: var(--success-hover);
+}
+
+.btn-danger {
+    background: var(--danger);
+    color: white;
+}
+
+.btn-danger:hover {
+    background: var(--danger-hover);
+}
+
+.btn-warning {
+    background: var(--warning);
+    color: white;
+}
+
+.btn-warning:hover {
+    background: var(--warning-hover);
+}
+
+.btn-secondary {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+}
+
+.btn-secondary:hover {
+    background: var(--border-color);
+}
+
+.btn-icon {
+    padding: var(--spacing-sm);
+    min-width: 40px;
+    min-height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+@media (max-width: 768px) {
+    .btn {
+        padding: var(--spacing-sm) var(--spacing-md);
+        font-size: 0.85rem;
+    }
+    
+    .btn-icon {
+        min-width: 36px;
+        min-height: 36px;
+    }
+}
+
+/* ========== FORM ELEMENTS ========== */
+.form-group {
+    margin-bottom: var(--spacing-lg);
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: var(--spacing-sm);
+    font-weight: 600;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+input[type="text"],
+input[type="number"],
+input[type="date"],
+input[type="url"],
+input[type="email"],
+input[type="password"],
+textarea,
+select {
+    width: 100%;
+    padding: var(--spacing-md);
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.95rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    transition: all var(--transition-base);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+textarea {
+    resize: vertical;
+    min-height: 100px;
+}
+
+/* ========== SEARCH BOX ========== */
+.search-box {
+    display: flex;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.search-input-wrapper {
+    position: relative;
+    flex: 1;
+    min-width: 250px;
+}
+
+.search-clear-btn {
+    position: absolute;
+    right: var(--spacing-sm);
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    padding: var(--spacing-sm);
+    font-size: 1.25rem;
+    display: none;
+    transition: color var(--transition-fast);
+}
+
+.search-clear-btn.visible {
+    display: block;
+}
+
+.search-clear-btn:hover {
+    color: var(--danger);
+}
+
+/* ========== MODAL ========== */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(4px);
+    animation: fadeIn var(--transition-base);
+}
+
+.modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-md);
+}
+
+.modal-content {
+    background: var(--bg-primary);
+    padding: var(--spacing-xl);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-xl);
+    max-width: 600px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    animation: slideUp var(--transition-base);
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-content h2 {
+    margin-bottom: var(--spacing-lg);
+    color: var(--text-primary);
+}
+
+@media (max-width: 768px) {
+    .modal-content {
+        padding: var(--spacing-lg);
+        max-height: 95vh;
+    }
+}
+
+/* ========== DATATABLES STYLING ========== */
+.dataTables_wrapper {
+    padding: 0 !important;
+    overflow-x: auto;
+}
+
+#productsDataTable {
+    width: 100% !important;
+    border-collapse: separate !important;
+    border-spacing: 0 4px !important;
+    font-size: 0.9rem;
+}
+
+#productsDataTable thead tr {
+    background: var(--bg-secondary);
+}
+
+#productsDataTable thead th {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    font-weight: 600 !important;
+    padding: var(--spacing-sm) var(--spacing-sm) !important;
+    border: none !important;
+    font-size: 0.85rem;
+    white-space: nowrap;
+}
+
+#productsDataTable thead tr:first-child th {
+    border-top-left-radius: var(--radius-md);
+    border-top-right-radius: var(--radius-md);
+}
+
+#productsDataTable thead tr.filters th {
+    background: var(--bg-tertiary) !important;
+    padding: var(--spacing-xs) var(--spacing-sm) !important;
+}
+
+#productsDataTable tbody tr {
+    background: var(--bg-primary);
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition-base);
+}
+
+#productsDataTable tbody tr:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+#productsDataTable tbody td {
+    padding: var(--spacing-sm) var(--spacing-sm) !important;
+    border: none !important;
+    color: var(--text-primary) !important;
+}
+
+#productsDataTable tbody tr td:first-child {
+    border-top-left-radius: var(--radius-md);
+    border-bottom-left-radius: var(--radius-md);
+}
+
+#productsDataTable tbody tr td:last-child {
+    border-top-right-radius: var(--radius-md);
+    border-bottom-right-radius: var(--radius-md);
+}
+
+/* ========== ACCORDION ========== */
+.accordion-item {
+    background: var(--bg-primary);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-md);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: all var(--transition-base);
+}
+
+.accordion-item:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.accordion-header {
+    padding: var(--spacing-lg);
+    cursor: pointer;
+    transition: background var(--transition-base);
+}
+
+.accordion-header:hover {
+    background: var(--bg-secondary);
+}
+
+.accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height var(--transition-slow), padding var(--transition-slow);
+    padding: 0 var(--spacing-lg);
+}
+
+.accordion-content.active {
+    max-height: 2000px;
+    padding: var(--spacing-lg);
+}
+
+.accordion-icon {
+    transition: transform var(--transition-base);
+    display: inline-block;
+}
+
+/* ========== BADGES ========== */
+.badge {
+    display: inline-block;
+    padding: var(--spacing-xs) var(--spacing-md);
+    border-radius: var(--radius-full);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.badge-success {
+    background: var(--success-light);
+    color: var(--success);
+}
+
+.badge-danger {
+    background: var(--danger-light);
+    color: var(--danger);
+}
+
+.badge-warning {
+    background: var(--warning-light);
+    color: var(--warning);
+}
+
+/* ========== MOBILE RESPONSIVE ========== */
+@media (max-width: 768px) {
+    body {
+        font-size: 14px;
+    }
+    
+    .header h1 {
+        font-size: 1.5rem;
+    }
+    
+    .search-box {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .search-input-wrapper {
+        min-width: 100%;
+    }
+    
+    /* Stack buttons vertically on mobile */
+    .search-box > div {
+        width: 100%;
+    }
+    
+    .search-box > div button {
+        width: 100%;
+    }
+    
+    /* Make tables scrollable */
+    .dataTables_wrapper {
+        overflow-x: auto;
+    }
+    
+    #productsDataTable {
+        min-width: 800px;
+    }
+}
+
+@media (max-width: 480px) {
+    .container {
+        padding: var(--spacing-sm);
+    }
+    
+    .content {
+        padding: var(--spacing-md);
+    }
+    
+    .modal-content {
+        padding: var(--spacing-md);
+        border-radius: var(--radius-lg);
+    }
+    
+    .btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+/* ========== UTILITY CLASSES ========== */
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.mt-1 { margin-top: var(--spacing-sm); }
+.mt-2 { margin-top: var(--spacing-md); }
+.mt-3 { margin-top: var(--spacing-lg); }
+.mb-1 { margin-bottom: var(--spacing-sm); }
+.mb-2 { margin-bottom: var(--spacing-md); }
+.mb-3 { margin-bottom: var(--spacing-lg); }
+.p-1 { padding: var(--spacing-sm); }
+.p-2 { padding: var(--spacing-md); }
+.p-3 { padding: var(--spacing-lg); }
+
+/* ========== ANIMATIONS ========== */
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+}
+
+.animate-pulse {
+    animation: pulse 2s infinite;
+}
+
+/* ========== SCROLLBAR ========== */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--primary);
+    border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--primary-hover);
+}
+
+/* ========== TABLE OPTIMIZATIONS ========== */
+#productsDataTable .action-buttons {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+}
+
+#productsDataTable .action-buttons .btn-icon {
+    min-width: 32px;
+    min-height: 32px;
+    padding: 4px;
+    font-size: 1rem;
+}
+
+#productsDataTable code {
+    font-size: 0.85rem;
+    padding: 2px 6px;
+}
+
+#productsDataTable small {
+    font-size: 0.75rem;
+}
+
+/* Оптимизация для широких экранов */
+@media (min-width: 1600px) {
+    .container {
+        max-width: 1500px;
+    }
+}
+
+@media (min-width: 1920px) {
+    .container {
+        max-width: 1800px;
+    }
+}
+
+/* Content без лишних отступов */
+.content {
+    padding: var(--spacing-lg);
+}
+
+@media (min-width: 1200px) {
+    .content {
+        padding: var(--spacing-xl) var(--spacing-lg);
+    }
+}
+
+
+/* ========== ACCORDION TABLES DARK THEME FIX ========== */
+.accordion-content table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.accordion-content table thead {
+    background: var(--bg-secondary) !important;
+}
+
+.accordion-content table thead tr {
+    background: var(--bg-secondary) !important;
+}
+
+.accordion-content table thead th {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    padding: 8px;
+    text-align: left;
+    border-bottom: 2px solid var(--border-color) !important;
+    font-weight: 600;
+}
+
+.accordion-content table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-primary);
+}
+
+.accordion-content table tbody td {
+    padding: 8px;
+    color: var(--text-primary) !important;
+}
+
+.accordion-content table code {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+/* Цвета для количества в таблицах */
+.accordion-content table td[style*="color: #28a745"],
+.accordion-content table td[style*="color: green"] {
+    color: var(--success) !important;
+}
+
+.accordion-content table td[style*="color: #dc3545"],
+.accordion-content table td[style*="color: red"] {
+    color: var(--danger) !important;
+}
+
+.accordion-content table td[style*="color: #ffc107"],
+.accordion-content table td[style*="color: #856404"] {
+    color: var(--warning) !important;
+}
+
+
+/* ========== ALL CONTENT TABLES DARK THEME FIX ========== */
+.content table,
+#writeoffSummary table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-primary);
+}
+
+.content table thead,
+#writeoffSummary table thead {
+    background: var(--bg-secondary) !important;
+}
+
+.content table thead tr,
+#writeoffSummary table thead tr {
+    background: var(--bg-secondary) !important;
+}
+
+.content table thead th,
+#writeoffSummary table thead th {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    padding: 12px;
+    text-align: left;
+    border-bottom: 2px solid var(--border-color) !important;
+    font-weight: 600;
+}
+
+.content table tbody tr,
+#writeoffSummary table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    transition: background var(--transition-fast);
+}
+
+.content table tbody tr:hover,
+#writeoffSummary table tbody tr:hover {
+    background: var(--bg-secondary);
+}
+
+.content table tbody td,
+#writeoffSummary table tbody td {
+    padding: 12px;
+    color: var(--text-primary) !important;
+}
+
+.content table code,
+#writeoffSummary table code {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-family: 'Courier New', monospace;
+}
+
+/* Стили для бейджей причин списания */
+.content table span[style*="color"],
+#writeoffSummary table span[style*="color"] {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-weight: 600;
+    font-size: 0.85rem;
+}
+
+
+/* ========== MODAL DARK THEME FIX ========== */
+.modal-content {
+    max-width: 1000px !important;  /* Было 900px */
+    max-height: 95vh !important;
+}
+
+/* Поля форм в темной теме */
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="number"],
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] input[type="url"],
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+    background: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+    color: var(--text-tertiary) !important;
+}
+
+/* Grid для кастомных полей - 3 колонки на широких экранах */
+#customFieldsList {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (min-width: 1200px) {
+    #customFieldsList {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    #customFieldsList {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Компактные поля */
+.form-group {
+    margin-bottom: var(--spacing-md);
+}
+
+.form-group label {
+    margin-bottom: 6px;
+    font-size: 0.9rem;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    padding: 10px 12px;
+    font-size: 0.9rem;
+}
+
+/* Секция дополнительных полей */
+.modal-content > div[style*="background: #f8f9fa"] {
+    background: var(--bg-secondary) !important;
+    padding: var(--spacing-md) !important;
+}
+
+[data-theme="dark"] .modal-content h3 {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .modal-content small {
+    color: var(--text-tertiary) !important;
+}
+
+/* Базовые поля в модалке - более компактный grid */
+.modal-content > div[style*="grid-template-columns"] {
+    gap: 12px !important;
+}
+
+
+/* ========== CUSTOM FIELDS SECTION ========== */
+.custom-fields-section {
+    background: var(--bg-secondary);
+    padding: var(--spacing-md);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.form-hint {
+    color: var(--text-tertiary);
+    display: block;
+    margin-top: var(--spacing-sm);
+    font-size: 0.85rem;
+}
+
+
+/* ========== INVENTORY MODAL DARK THEME FIX ========== */
+
+/* Карточки товаров в коробе */
+[data-theme="dark"] .scanned-item {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Секция текущего короба */
+[data-theme="dark"] #scannedItems > div[style*="background: #e8f4f8"] {
+    background: var(--bg-tertiary) !important;
+    border-left-color: var(--primary) !important;
+}
+
+/* Завершенные коробы */
+[data-theme="dark"] #completedBoxes > div > div[style*="background: #d4edda"] {
+    background: rgba(72, 187, 120, 0.15) !important;
+    border-left-color: var(--success) !important;
+}
+
+[data-theme="dark"] #completedBoxes > div > div[style*="background: #d4edda"] h4,
+[data-theme="dark"] #completedBoxes > div > div[style*="background: #d4edda"] div {
+    color: var(--text-primary) !important;
+}
+
+/* Поле сканирования */
+[data-theme="dark"] #scanInput {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--primary) !important;
+}
+
+/* Счетчики */
+[data-theme="dark"] .scanned-item-count {
+    background: rgba(102, 126, 234, 0.8) !important;
+}
+
+/* Кнопка "Короб готов" */
+[data-theme="dark"] .scanned-item button[style*="background: #28a745"] {
+    background: var(--success) !important;
+}
+
+/* Заголовки в модалке инвентаризации */
+[data-theme="dark"] #inventoryModal h3,
+[data-theme="dark"] #inventoryModal h4 {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] #inventoryModal small,
+[data-theme="dark"] #inventoryModal .details {
+    color: var(--text-secondary) !important;
+}
+
+
+/* ========== SETTINGS PAGE DARK THEME FIX ========== */
+
+/* Контейнер настроек полей */
+[data-theme="dark"] #fieldsList {
+    background: var(--bg-primary) !important;
+}
+
+/* Карточки полей */
+[data-theme="dark"] .field-item {
+    background: var(--bg-secondary) !important;
+    border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .field-item input[type="text"] {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+
+/* Списки значений для select полей */
+[data-theme="dark"] .field-item > div[style*="background: #f8f9fa"] {
+    background: var(--bg-tertiary) !important;
+}
+
+[data-theme="dark"] .field-item input[readonly] {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Чекбоксы */
+[data-theme="dark"] input[type="checkbox"] {
+    accent-color: var(--primary);
+}
+
+/* Кнопки добавления значений */
+[data-theme="dark"] button[style*="background: #667eea"] {
+    background: var(--primary) !important;
+}
+
+/* Заголовки в настройках */
+[data-theme="dark"] #settings h2,
+[data-theme="dark"] #settings h3 {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] #settings p {
+    color: var(--text-secondary) !important;
+}
+
+
+/* ========== SETTINGS STRONG OVERRIDE FOR DARK THEME ========== */
+
+/* Все элементы в #fieldsList */
+[data-theme="dark"] #fieldsList,
+[data-theme="dark"] #fieldsList * {
+    color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] #fieldsList {
+    background: transparent !important;
+}
+
+/* Карточки полей - перезаписываем inline стили */
+[data-theme="dark"] .field-item,
+[data-theme="dark"] #fieldsList > div {
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--border-color) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Все input в настройках */
+[data-theme="dark"] #fieldsList input[type="text"],
+[data-theme="dark"] #settings input[type="text"] {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+    border: 2px solid var(--border-color) !important;
+}
+
+/* Все select в настройках */
+[data-theme="dark"] #fieldsList select,
+[data-theme="dark"] #settings select {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+    border: 2px solid var(--border-color) !important;
+}
+
+/* Секции со списками значений */
+[data-theme="dark"] #fieldsList div[style*="background"],
+[data-theme="dark"] #fieldsList > div > div[style*="padding"] {
+    background: var(--bg-tertiary) !important;
+}
+
+/* Readonly элементы */
+[data-theme="dark"] #fieldsList input[readonly],
+[data-theme="dark"] #fieldsList div[style*="background: #e9ecef"] {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
+/* Кнопки "Добавить значение" */
+[data-theme="dark"] #settings button {
+    background: var(--primary) !important;
+    color: white !important;
+}
+
+[data-theme="dark"] #settings .btn-danger {
+    background: var(--danger) !important;
+}
+
+[data-theme="dark"] #settings .btn-success {
+    background: var(--success) !important;
+}
+
+[data-theme="dark"] #settings .btn-secondary {
+    background: var(--bg-tertiary) !important;
+    color: var(--text-primary) !important;
+}
+
+
+/* ========== SETTINGS FIELDS WITH CLASSES ========== */
+.field-setting-item {
+    margin-bottom: 15px;
+    display: grid;
+    grid-template-columns: 2fr 1.5fr 1fr 1fr auto;
+    gap: 10px;
+    align-items: center;
+    background: var(--bg-secondary);
+    padding: 15px;
+    border-radius: var(--radius-md);
+}
+
+.field-setting-item input[type="text"],
+.field-setting-item select {
+    font-weight: 500;
+    padding: 10px;
+}
+
+.checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    cursor: pointer;
+}
+
+.checkbox-label span {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.options-editor {
+    grid-column: 1 / -1;
+    background: var(--bg-tertiary);
+    padding: 15px;
+    padding-left: 40px;  /* Отступ слева для визуальной вложенности */
+    border-radius: var(--radius-sm);
+    margin-top: 10px;
+    margin-left: 30px;   /* Дополнительный отступ */
+    border-left: 3px solid var(--primary);  /* Синяя полоска слева */
+    position: relative;
+}
+
+.options-editor::before {
+    content: '└─';
+    position: absolute;
+    left: -20px;
+    top: 15px;
+    color: var(--text-tertiary);
+    font-size: 16px;
+}
+
+.options-editor strong {
+    font-size: 13px;
+    color: var(--text-primary);
+}
+
+.options-list {
+    margin-top: 10px;
+    margin-left: 10px;  /* Еще отступ для самих значений */
+}
+
+.option-item {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 5px;
+}
+
+.option-item input {
+    flex: 1;
+    padding: 5px;
+}
+
+.add-option-btn {
+    margin-top: 5px;
+    padding: 5px 10px;
+    font-size: 13px;
+}
+
+
+/* ========== PRODUCT FIELDS LIST CONTAINER ========== */
+#productFieldsList {
+    background: transparent !important;
+    padding: 0 !important;
+}
+
+/* Светлая тема - можно оставить белый контейнер */
+[data-theme="light"] #productFieldsList {
+    background: white !important;
+}
+
+/* Темная тема - прозрачный или темный */
+[data-theme="dark"] #productFieldsList {
+    background: transparent !important;
+}
+
+
+/* ========== SETTINGS SECTION STYLES ========== */
+.settings-description {
+    margin-bottom: 20px;
+    color: var(--text-secondary);
+}
+
+.settings-section {
+    background: var(--bg-secondary);
+    padding: 20px;
+    border-radius: var(--radius-md);
+    margin-bottom: 30px;
+}
+
+.settings-section h3 {
+    margin-bottom: 15px;
+    color: var(--text-primary);
+}
+
+.settings-warning {
+    background: var(--warning-light);
+    padding: 15px;
+    border-radius: var(--radius-sm);
+    border-left: 4px solid var(--warning);
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .settings-warning {
+    background: rgba(237, 137, 54, 0.15);
+    color: var(--text-primary);
+}
+
+
+/* ========== DRAG & DROP FOR FIELDS ========== */
+.field-setting-item {
+    position: relative;
+    cursor: move;
+    transition: all var(--transition-base);
+}
+
+.field-setting-item.dragging {
+    opacity: 0.5;
+    transform: scale(0.98);
+}
+
+.field-setting-item.drag-over {
+    border-top: 3px solid var(--primary);
+    margin-top: 5px;
+}
+
+.drag-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: grab;
+    color: var(--text-tertiary);
+    font-size: 20px;
+    padding: 0 8px;
+    user-select: none;
+    transition: color var(--transition-fast);
+}
+
+.drag-handle:hover {
+    color: var(--primary);
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.drag-handle span {
+    display: block;
+    line-height: 1;
+    letter-spacing: -2px;
+}
+
+/* Обновляем grid для field-setting-item */
+.field-setting-item {
+    grid-template-columns: auto 2fr 1.5fr 1fr 1fr auto;
+}
+
+@media (max-width: 1200px) {
+    .field-setting-item {
+        grid-template-columns: auto 1.5fr 1fr 1fr auto;
+    }
+    
+    .checkbox-label {
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 768px) {
+    .field-setting-item {
+        grid-template-columns: auto 1fr auto;
+    }
+    
+    .drag-handle {
+        grid-row: 1 / span 2;
+    }
+}
+
+
+/* ========== DATATABLES LENGTH MENU FIX ========== */
+.dataTables_length {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 0;
+    flex-wrap: wrap;
+}
+
+.dataTables_length label {
+    display: inline-flex !important;
+    align-items: center;
+    margin: 0;
+}
+
+.dataTables_length select {
+    margin: 0 8px;
+}
+
+/* Обертка для элементов управления таблицей */
+.dataTables_wrapper .dataTables_length,
+.dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_info,
+.dataTables_wrapper .dataTables_paginate {
+    margin-bottom: 12px;
+}
+
+/* Контейнер с кнопками и фильтром */
+.dataTables_wrapper .dt-buttons {
+    display: inline-flex;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+
+/* ========== COLOR PICKER ========== */
+.color-picker-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.color-picker-wrapper input[type="color"] {
+    width: 60px;
+    height: 44px;
+    padding: 2px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    background: var(--bg-primary);
+}
+
+.color-picker-wrapper input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.color-picker-wrapper input[type="color"]::-webkit-color-swatch {
+    border: none;
+    border-radius: 6px;
+}
+
+.color-picker-wrapper input[type="text"] {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    text-transform: uppercase;
+}
+
+.color-preview {
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+/* ========== COLOR IN TABLE ========== */
+.color-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.color-square {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    border: 2px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    flex-shrink: 0;
+}
+
+.color-cell span {
+    font-family: 'Courier New', monospace;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+
+/* ========== WRITEOFF ITEM CARDS ========== */
+.writeoff-item-card {
+    background: var(--bg-primary);
+    padding: 15px;
+    border-radius: var(--radius-md);
+    margin-bottom: 10px;
+    border: 1px solid var(--border-color);
+}
+
+.writeoff-item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: start;
+    margin-bottom: 10px;
+}
+
+.writeoff-item-info {
+    flex: 1;
+}
+
+.writeoff-item-info strong {
+    color: var(--text-primary);
+}
+
+.writeoff-item-info small {
+    color: var(--text-secondary);
+}
+
+.writeoff-item-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr 2fr;
+    gap: 10px;
+}
+
+.writeoff-item-fields input,
+.writeoff-item-fields select {
+    width: 100%;
+    padding: 8px;
+}
+
+.field-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: block;
+    margin-bottom: 4px;
+}
+
+.empty-message {
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+    .writeoff-item-fields {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* ========== SEARCH RESULT ITEMS ========== */
+.search-result-item {
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    margin-bottom: 5px;
+    cursor: pointer;
+    background: var(--bg-primary);
+    transition: all var(--transition-fast);
+}
+
+.search-result-item:hover {
+    background: var(--bg-secondary);
+    transform: translateX(4px);
+    box-shadow: var(--shadow-sm);
+}
+
+.search-result-item strong {
+    color: var(--text-primary);
+}
+
+.search-result-item small {
+    color: var(--text-secondary);
+}
+
+
+/* ========== RECEIPT/SHIPMENT ITEM CARDS ========== */
+.receipt-item {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid var(--primary);
+    border-radius: var(--radius-md);
+    padding: 15px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.receipt-item-info {
+    flex: 1;
+    min-width: 0;  /* Для text-overflow */
+}
+
+.receipt-item-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.receipt-item-sku {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.receipt-item-sku code {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.receipt-item-controls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.receipt-quantity-input {
+    width: 80px;
+    padding: 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+/* Предупреждение о недостатке товара */
+.receipt-item[style*="border-left-color: #dc3545"] {
+    border-left-color: var(--danger) !important;
+    background: rgba(220, 53, 69, 0.05) !important;
+}
+
+[data-theme="dark"] .receipt-item[style*="background: #fff5f5"] {
+    background: rgba(220, 53, 69, 0.1) !important;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+    .receipt-item {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .receipt-item-controls {
+        justify-content: space-between;
+    }
+    
+    .receipt-quantity-input {
+        flex: 1;
+    }
+}
+
+
+/* Инвентаризация - контейнер для отсканированных товаров */
+.inventory-items-container {
+    background: var(--bg-secondary);
+    padding: 20px;
+    border-radius: 8px;
+    margin: 20px 0;
+    border: 1px solid var(--border-color);
+}
+
+/* Универсальный класс для контейнеров с фоном */
+.items-container {
+    background: var(--bg-secondary);
+    padding: 20px;
+    border-radius: 8px;
+    margin: 20px 0;
+    border: 1px solid var(--border-color);
+}
+
+
+/* Инвентаризация - блок готового короба */
+.inventory-box-item {
+    background: var(--bg-secondary);
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border-color);
+}
+
+/* Инвентаризация - строка товара в коробе */
+.inventory-box-item-row {
+    padding: 6px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+}
+
+.inventory-box-item-row:last-child {
+    border-bottom: none;
+}
+
+
+/* ==================== РЕЗУЛЬТАТЫ ИНВЕНТАРИЗАЦИИ ==================== */
+
+/* Блок статистики сверху */
+.inventory-results-stats {
+    background: var(--bg-secondary);
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+}
+
+/* Блок короба в результатах */
+.inventory-result-box {
+    background: var(--bg-secondary);
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 15px;
+    border: 1px solid var(--border-color);
+}
+
+/* Таблицы в результатах */
+.inventory-result-table {
+    width: 100%;
+    font-size: 13px;
+    border-collapse: collapse;
+}
+
+.inventory-result-table thead tr {
+    background: var(--bg-secondary);
+}
+
+.inventory-result-table th {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 2px solid var(--border-color);
+}
+
+.inventory-result-table tbody tr {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.inventory-result-table td {
+    padding: 10px;
+}
+
+/* Табы результатов */
+.result-tab {
+    padding: 10px 20px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    color: var(--text-secondary);
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s;
+}
+
+.result-tab:hover {
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+}
+
+.result-tab.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+    font-weight: bold;
+}
+
+.result-tab-content {
+    display: none;
+}
+
+.result-tab-content.active {
+    display: block;
+}
+
+/* Разделитель табов */
+.tabs-divider {
+    border-bottom: 2px solid var(--border-color);
+    margin-bottom: 20px;
+}
+
+spinner {
+    border: 3px solid var(--border-color);
+    border-top: 3px solid #667eea;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.ozon-day-item {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.ozon-day-header {
+    padding: 15px;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background 0.2s;
+}
+
+.ozon-day-header:hover {
+    background: var(--bg-primary);
+}
+
+.ozon-day-arrow {
+    transition: transform 0.3s ease;
+}
+
+.ozon-day-item.active .ozon-day-arrow {
+    transform: rotate(180deg);
+}
+
+.ozon-day-body {
+    display: none;
+    padding: 15px;
+    border-top: 1px solid var(--border-color);
+}
+
+.ozon-day-item.active .ozon-day-body {
+    display: block;
+}
+
+.ozon-order-item {
+    background: var(--bg-primary);
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 8px;
+    border-left: 3px solid #667eea;
+}
+
+.ozon-status-badge {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.ozon-status-awaiting_deliver {
+    background: #ffc107;
+    color: #000;
+}
+
+.ozon-status-delivering {
+    background: #2196f3;
+    color: #fff;
+}
+
+.ozon-status-delivered {
+    background: #4caf50;
+    color: #fff;
+}
+

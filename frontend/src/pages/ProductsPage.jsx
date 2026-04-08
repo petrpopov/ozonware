@@ -1,0 +1,1163 @@
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { services } from '../api/services.js';
+import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
+import { useUiStore } from '../store/useUiStore.js';
+import { EditIcon, TrashIcon } from '../components/Icons.jsx';
+
+const emptyForm = {
+  id: null,
+  name: '',
+  sku: '',
+  quantity: 0,
+  description: '',
+  custom_fields: []
+};
+
+function normalizeCustomFields(product, fields) {
+  const map = new Map((product.custom_fields || []).map((f) => [f.name, f]));
+  return fields.map((field) => {
+    const existing = map.get(field.name);
+    let value = existing?.value ?? '';
+    if (!value && field.type === 'select' && field.required && field.options?.length) {
+      value = field.options[0];
+    }
+
+    return {
+      name: field.name,
+      value,
+      type: field.type,
+      required: !!field.required
+    };
+  });
+}
+
+function isHexColor(value) {
+  if (typeof value !== 'string') return false;
+  return /^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(value.trim());
+}
+
+function getNowStamp() {
+  const now = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+}
+
+function downloadTextFile(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function escapeCsvCell(value) {
+  const str = String(value ?? '');
+  if (str.includes('"') || str.includes(';') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function normalizeSheetRows(rawRows) {
+  const rows = (rawRows || []).map((row) => (Array.isArray(row) ? row : []));
+  if (!rows.length) {
+    return { headers: [], rows: [] };
+  }
+
+  // Find the right-most non-empty cell across all rows to avoid huge trailing empty columns.
+  let maxColIndex = -1;
+  rows.forEach((row) => {
+    row.forEach((cell, index) => {
+      if (String(cell ?? '').trim() !== '' && index > maxColIndex) {
+        maxColIndex = index;
+      }
+    });
+  });
+
+  if (maxColIndex < 0) {
+    return { headers: [], rows: [] };
+  }
+
+  const clipped = rows.map((row) => row.slice(0, maxColIndex + 1));
+  const headerRow = clipped[0] || [];
+  const headers = headerRow.map((item, idx) => String(item || `Колонка ${idx + 1}`).trim());
+  const dataRows = clipped
+    .slice(1)
+    .filter((row) => row.some((cell) => String(cell ?? '').trim() !== ''));
+
+  return { headers, rows: dataRows };
+}
+
+let xlsxModulePromise = null;
+async function loadXlsx() {
+  if (!xlsxModulePromise) {
+    xlsxModulePromise = import('xlsx');
+  }
+  return xlsxModulePromise;
+}
+
+export default function ProductsPage() {
+  const navigate = useNavigate();
+  const [search, setSearch] = useState('');
+  const [pageLimit, setPageLimit] = useState('20');
+  const [page, setPage] = useState(1);
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm);
+  const [errors, setErrors] = useState({});
+  const [showZeroStock, setShowZeroStock] = useState(false);
+  const [sort, setSort] = useState({ key: 'id', dir: 'desc' });
+  const [importOpen, setImportOpen] = useState(false);
+  const [importStep, setImportStep] = useState(1);
+  const [importFileName, setImportFileName] = useState('');
+  const [importSheets, setImportSheets] = useState([]);
+  const [selectedSheet, setSelectedSheet] = useState('');
+  const [importHeaders, setImportHeaders] = useState([]);
+  const [importRows, setImportRows] = useState([]);
+  const [importMapping, setImportMapping] = useState({});
+  const [importStats, setImportStats] = useState(null);
+  const [importError, setImportError] = useState('');
+  const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const pushToast = useUiStore((s) => s.pushToast);
+  const queryClient = useQueryClient();
+
+  const productsQuery = useQuery({
+    queryKey: ['products', search],
+    queryFn: () => services.getProducts(search),
+    placeholderData: (previousData) => previousData
+  });
+
+  const fieldsQuery = useQuery({
+    queryKey: ['product-fields'],
+    queryFn: services.getProductFields
+  });
+
+  useRouteRefetch(productsQuery.refetch);
+  useRouteRefetch(fieldsQuery.refetch);
+
+  const products = productsQuery.data || [];
+  const fields = useMemo(
+    () =>
+      (fieldsQuery.data || []).map((field) => ({
+        ...field,
+        required: !!field.required,
+        options: Array.isArray(field.options) ? field.options : [],
+        showInTable: field.showInTable ?? field.show_in_table ?? true
+      })),
+    [fieldsQuery.data]
+  );
+
+  const fieldNames = useMemo(
+    () => fields.filter((f) => f.showInTable !== false).map((f) => f.name),
+    [fields]
+  );
+
+  const importTargets = useMemo(() => {
+    const base = [
+      { key: '', label: '-- Не импортировать --' },
+      { key: 'name', label: 'Название товара' },
+      { key: 'sku', label: 'SKU' },
+      { key: 'description', label: 'Описание' }
+    ];
+    const custom = fields.map((field) => ({
+      key: `custom:${field.name}`,
+      label: `${field.name} (доп. поле)`
+    }));
+    return [...base, ...custom];
+  }, [fields]);
+
+  const productsStats = useMemo(() => {
+    const totalSkus = products.length;
+    const inStockSkus = products.filter((item) => Number(item.quantity || 0) > 0).length;
+    const inStockUnits = products.reduce(
+      (sum, item) => sum + Math.max(0, Number(item.quantity || 0)),
+      0
+    );
+    return { totalSkus, inStockSkus, inStockUnits };
+  }, [products]);
+
+  const visibleProducts = useMemo(() => {
+    if (showZeroStock) {
+      return products;
+    }
+    return products.filter((item) => Number(item.quantity || 0) > 0);
+  }, [products, showZeroStock]);
+
+  const sortedProducts = useMemo(() => {
+    const list = [...visibleProducts];
+
+    const getValue = (product, key) => {
+      if (key === 'id') return product.id;
+      if (key === 'name') return product.name || '';
+      if (key === 'sku') return product.sku || '';
+      if (key === 'quantity') return Number(product.quantity || 0);
+      if (key.startsWith('custom:')) {
+        const fieldName = key.slice('custom:'.length);
+        const field = (product.custom_fields || []).find((item) => item.name === fieldName);
+        return field?.value ?? '';
+      }
+      return '';
+    };
+
+    list.sort((a, b) => {
+      const left = getValue(a, sort.key);
+      const right = getValue(b, sort.key);
+
+      const leftNumber = Number(left);
+      const rightNumber = Number(right);
+      const bothNumbers = Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && left !== '' && right !== '';
+
+      let result = 0;
+      if (bothNumbers) {
+        result = leftNumber - rightNumber;
+      } else {
+        result = String(left).localeCompare(String(right), 'ru', { numeric: true, sensitivity: 'base' });
+      }
+
+      return sort.dir === 'asc' ? result : -result;
+    });
+
+    return list;
+  }, [visibleProducts, sort]);
+
+  const totalProducts = sortedProducts.length;
+  const effectiveLimit = pageLimit === 'all' ? totalProducts || 1 : Number(pageLimit);
+  const totalPages = pageLimit === 'all' ? 1 : Math.max(1, Math.ceil(totalProducts / Math.max(1, effectiveLimit)));
+  const safePage = Math.min(page, totalPages);
+  const pageOffset = pageLimit === 'all' ? 0 : (safePage - 1) * effectiveLimit;
+  const pagedProducts = pageLimit === 'all' ? sortedProducts : sortedProducts.slice(pageOffset, pageOffset + effectiveLimit);
+  const rangeStart = totalProducts === 0 ? 0 : pageOffset + 1;
+  const rangeEnd = totalProducts === 0 ? 0 : Math.min(pageOffset + pagedProducts.length, totalProducts);
+
+  const toggleSort = (key) => {
+    setSort((prev) => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
+      }
+      return { key, dir: 'asc' };
+    });
+  };
+
+  const renderSortMark = (key) => {
+    if (sort.key !== key) return '↕';
+    return sort.dir === 'asc' ? '↑' : '↓';
+  };
+
+  const exportColumns = useMemo(
+    () => ['ID', 'Название', 'SKU', ...fieldNames, 'Остаток'],
+    [fieldNames]
+  );
+
+  const exportRows = useMemo(
+    () =>
+      sortedProducts.map((product) => {
+        const fieldMap = new Map((product.custom_fields || []).map((f) => [f.name, f.value]));
+        return [
+          product.id,
+          product.name,
+          product.sku,
+          ...fieldNames.map((fieldName) => fieldMap.get(fieldName) || ''),
+          product.quantity
+        ];
+      }),
+    [sortedProducts, fieldNames]
+  );
+
+  const exportCsv = () => {
+    const rows = [exportColumns, ...exportRows];
+    const csv = rows.map((row) => row.map(escapeCsvCell).join(';')).join('\n');
+    downloadTextFile(`\uFEFF${csv}`, `products_${getNowStamp()}.csv`, 'text/csv;charset=utf-8;');
+  };
+
+  const exportExcel = () => {
+    (async () => {
+      const XLSX = await loadXlsx();
+      const data = [exportColumns, ...exportRows];
+      const worksheet = XLSX.utils.aoa_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Products');
+      XLSX.writeFileXLSX(workbook, `products_${getNowStamp()}.xlsx`);
+    })().catch((error) => {
+      pushToast(`Ошибка экспорта Excel: ${error.message}`, 'error');
+    });
+  };
+
+  const saveMutation = useMutation({
+    mutationFn: async (payload) => {
+      if (payload.id) {
+        return services.updateProduct(payload.id, payload);
+      }
+      return services.createProduct(payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      setOpen(false);
+      setForm(emptyForm);
+      pushToast('Товар сохранен', 'success');
+    },
+    onError: (error) => pushToast(error.message, 'error')
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id) => services.deleteProduct(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      pushToast('Товар удален', 'success');
+    },
+    onError: (error) => pushToast(error.message, 'error')
+  });
+
+  const syncOzonProductsMutation = useMutation({
+    mutationFn: services.syncOzonProducts,
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['product-fields'] });
+      const summary = result?.summary || {};
+      pushToast(
+        `OZON: обновлено фото ${summary.updated || 0} (найдено: ${summary.matched || 0}, не найдено: ${summary.notFound || 0})`,
+        'success'
+      );
+    },
+    onError: (error) => pushToast(error.message, 'error')
+  });
+
+  const openCreate = () => {
+    setForm({
+      ...emptyForm,
+      custom_fields: fields.map((field) => ({
+        name: field.name,
+        value: field.type === 'select' && field.required && field.options?.length ? field.options[0] : '',
+        type: field.type,
+        required: !!field.required
+      }))
+    });
+    setErrors({});
+    setOpen(true);
+  };
+
+  const closeImportModal = () => {
+    setImportOpen(false);
+    setImportStep(1);
+    setImportFileName('');
+    setImportSheets([]);
+    setSelectedSheet('');
+    setImportHeaders([]);
+    setImportRows([]);
+    setImportMapping({});
+    setImportStats(null);
+    setImportError('');
+  };
+
+  const normalizeText = (value) => String(value ?? '').trim().toLowerCase();
+
+  const autoBuildMapping = (headers) => {
+    const next = {};
+    headers.forEach((header, index) => {
+      const normalized = normalizeText(header);
+      const target = importTargets.find((item) => {
+        if (!item.key) return false;
+        if (normalizeText(item.label) === normalized) return true;
+        if (normalizeText(item.key) === normalized) return true;
+        if (item.key.startsWith('custom:')) {
+          const fieldName = item.key.slice('custom:'.length);
+          return normalizeText(fieldName) === normalized;
+        }
+        return false;
+      });
+      next[index] = target?.key || '';
+    });
+    setImportMapping(next);
+  };
+
+  const applySelectedSheet = (sheetName) => {
+    const sheet = importSheets.find((item) => item.name === sheetName);
+    if (!sheet) {
+      setImportError('Выбранный лист не найден');
+      return false;
+    }
+    if (!sheet.headers.length) {
+      setImportError('На выбранном листе нет заголовков');
+      return false;
+    }
+
+    setImportError('');
+    setSelectedSheet(sheet.name);
+    setImportHeaders(sheet.headers);
+    setImportRows(sheet.rows);
+    autoBuildMapping(sheet.headers);
+    return true;
+  };
+
+  const handleImportFile = async (file) => {
+    if (!file) return;
+    if (!/\.xlsx?$/.test(file.name.toLowerCase())) {
+      setImportError('Поддерживаются только .xlsx и .xls файлы');
+      return;
+    }
+
+    try {
+      setImportError('');
+      const XLSX = await loadXlsx();
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const sheets = workbook.SheetNames.map((sheetName) => {
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+        const normalized = normalizeSheetRows(rows);
+        return { name: sheetName, headers: normalized.headers, rows: normalized.rows };
+      });
+
+      if (!sheets.length) {
+        setImportError('В файле нет листов для импорта');
+        return;
+      }
+
+      const firstNonEmpty = sheets.find((sheet) => sheet.headers.length > 0) || sheets[0];
+      setImportFileName(file.name);
+      setImportSheets(sheets);
+      setSelectedSheet(firstNonEmpty.name);
+      setImportHeaders([]);
+      setImportRows([]);
+      setImportMapping({});
+      setImportStats(null);
+      setImportStep(1);
+    } catch (error) {
+      setImportError(`Ошибка чтения файла: ${error.message}`);
+    }
+  };
+
+  const continueToMapping = () => {
+    if (!selectedSheet) {
+      setImportError('Выберите лист для импорта');
+      return;
+    }
+    if (!applySelectedSheet(selectedSheet)) {
+      return;
+    }
+    setImportStep(2);
+  };
+
+  const setMappingValue = (columnIndex, targetKey) => {
+    setImportMapping((prev) => {
+      const next = { ...prev };
+      if (targetKey) {
+        Object.keys(next).forEach((key) => {
+          if (Number(key) !== columnIndex && next[key] === targetKey) {
+            next[key] = '';
+          }
+        });
+      }
+      next[columnIndex] = targetKey;
+      return next;
+    });
+  };
+
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      const mappedSku = Object.values(importMapping).includes('sku');
+      const mappedName = Object.values(importMapping).includes('name');
+
+      if (!mappedSku || !mappedName) {
+        throw new Error('Необходимо сопоставить колонки SKU и Название товара');
+      }
+
+      const existingSku = new Set(products.map((item) => normalizeText(item.sku)));
+      const fieldByName = new Map(fields.map((field) => [field.name, field]));
+
+      let created = 0;
+      let skippedDuplicate = 0;
+      let skippedInvalid = 0;
+
+      for (const row of importRows) {
+        let sku = '';
+        let name = '';
+        let description = '';
+        const customMap = new Map();
+
+        importHeaders.forEach((_, colIdx) => {
+          const target = importMapping[colIdx];
+          if (!target) return;
+
+          const raw = row[colIdx];
+          const value = String(raw ?? '').trim();
+
+          if (target === 'sku') sku = value;
+          else if (target === 'name') name = value;
+          else if (target === 'description') description = value;
+          else if (target.startsWith('custom:')) {
+            const fieldName = target.slice('custom:'.length);
+            if (!value) return;
+            const field = fieldByName.get(fieldName);
+            customMap.set(fieldName, {
+              name: fieldName,
+              type: field?.type || 'text',
+              value,
+              required: !!field?.required
+            });
+          }
+        });
+
+        const normalizedSku = normalizeText(sku);
+        if (!normalizedSku || !name.trim()) {
+          skippedInvalid += 1;
+          continue;
+        }
+
+        if (existingSku.has(normalizedSku)) {
+          skippedDuplicate += 1;
+          continue;
+        }
+
+        try {
+          await services.createProduct({
+            name: name.trim(),
+            sku: sku.trim(),
+            quantity: 0,
+            description: description.trim(),
+            custom_fields: Array.from(customMap.values())
+          });
+          existingSku.add(normalizedSku);
+          created += 1;
+        } catch (error) {
+          if (error.message.includes('SKU already exists')) {
+            skippedDuplicate += 1;
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      return { created, skippedDuplicate, skippedInvalid };
+    },
+    onSuccess: (result) => {
+      setImportStats(result);
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      pushToast(`Импорт завершен: добавлено ${result.created}`, 'success');
+    },
+    onError: (error) => {
+      setImportError(error.message);
+      pushToast(error.message, 'error');
+    }
+  });
+
+  const openEdit = (product) => {
+    setForm({
+      ...product,
+      custom_fields: normalizeCustomFields(product, fields)
+    });
+    setErrors({});
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open && !importOpen && !deleteCandidate) return undefined;
+
+    const handleEsc = (event) => {
+      if (event.key === 'Escape') {
+        if (open) {
+          setOpen(false);
+          setErrors({});
+        }
+        if (importOpen) {
+          closeImportModal();
+        }
+        if (deleteCandidate) {
+          setDeleteCandidate(null);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [open, importOpen, deleteCandidate]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, showZeroStock]);
+
+  useEffect(() => {
+    productsQuery.refetch();
+  }, [showZeroStock, pageLimit]);
+
+  useEffect(() => {
+    if (page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [page, totalPages]);
+
+  const validateForm = () => {
+    const nextErrors = {};
+
+    if (!form.name?.trim()) {
+      nextErrors.name = 'Введите название товара';
+    }
+
+    if (!form.sku?.trim()) {
+      nextErrors.sku = 'Введите SKU';
+    }
+
+    fields.forEach((field, idx) => {
+      if (!field.required) return;
+      const value = form.custom_fields?.[idx]?.value;
+      if (String(value ?? '').trim() === '') {
+        nextErrors[`custom_${idx}`] = `Поле "${field.name}" обязательно`;
+      }
+    });
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const submit = (event) => {
+    event.preventDefault();
+    if (!validateForm()) {
+      return;
+    }
+
+    const payload = {
+      id: form.id,
+      name: form.name.trim(),
+      sku: form.sku.trim(),
+      quantity: Number(form.quantity || 0),
+      description: form.description || '',
+      custom_fields: (form.custom_fields || [])
+        .filter((field) => {
+          if (typeof field.value === 'number') return true;
+          return String(field.value || '').trim() !== '';
+        })
+        .map((field) => ({
+          name: field.name,
+          value: field.value,
+          type: field.type,
+          required: field.required
+        }))
+    };
+    saveMutation.mutate(payload);
+  };
+
+  if (fieldsQuery.isLoading || (productsQuery.isLoading && !productsQuery.data)) {
+    return <p>Загрузка...</p>;
+  }
+
+  return (
+    <section>
+      <div className="toolbar">
+        <input
+          className="input"
+          placeholder="Поиск по названию / SKU"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <button className="btn" onClick={() => syncOzonProductsMutation.mutate()} disabled={syncOzonProductsMutation.isPending}>
+          {syncOzonProductsMutation.isPending ? 'Синхронизация...' : 'Синхр. товары OZON'}
+        </button>
+        <button className="btn" onClick={() => setImportOpen(true)}>Импорт Excel</button>
+        <button className="btn" onClick={exportExcel} title="Скачать видимую таблицу в Excel">Excel</button>
+        <button className="btn" onClick={exportCsv} title="Скачать видимую таблицу в CSV">CSV</button>
+        <button className="btn" onClick={() => productsQuery.refetch()}>Обновить</button>
+        <button className="btn btn-primary" onClick={openCreate}>+ Добавить</button>
+      </div>
+
+      <div className="products-info">
+        <label className="check stock-check">
+          <input
+            type="checkbox"
+            checked={showZeroStock}
+            onChange={(e) => setShowZeroStock(e.target.checked)}
+          />
+          Показывать товары с нулевым остатком
+        </label>
+        <div className="products-stats">
+          <span className="stat-pill">Артикулов: <strong>{productsStats.totalSkus}</strong></span>
+          <span className="stat-pill">В наличии: <strong>{productsStats.inStockSkus}</strong></span>
+          <span className="stat-pill">Единиц на складе: <strong>{productsStats.inStockUnits}</strong></span>
+        </div>
+      </div>
+
+      <div className="toolbar history-pager">
+        <label className="history-pager-label">
+          Показывать:
+          <select
+            className="input"
+            value={pageLimit}
+            onChange={(e) => {
+              setPageLimit(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="200">200</option>
+            <option value="all">Все</option>
+          </select>
+        </label>
+        <span className="history-pager-range">
+          {rangeStart}-{rangeEnd} из {totalProducts}
+        </span>
+        {pageLimit !== 'all' && (
+          <>
+            <button
+              className="btn"
+              type="button"
+              disabled={safePage <= 1}
+              onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+            >
+              Назад
+            </button>
+            <span className="history-pager-range">
+              Стр. {safePage} / {totalPages}
+            </span>
+            <button
+              className="btn"
+              type="button"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+            >
+              Вперед
+            </button>
+          </>
+        )}
+      </div>
+
+      <div className="table-wrap">
+        <table className="table table-compact">
+          <thead>
+            <tr>
+              <th className="sortable" onClick={() => toggleSort('id')}>ID <span>{renderSortMark('id')}</span></th>
+              <th>Фото</th>
+              <th className="sortable" onClick={() => toggleSort('name')}>Название <span>{renderSortMark('name')}</span></th>
+              <th className="sortable" onClick={() => toggleSort('sku')}>SKU <span>{renderSortMark('sku')}</span></th>
+              {fieldNames.map((name) => (
+                <th
+                  key={name}
+                  className="sortable"
+                  onClick={() => toggleSort(`custom:${name}`)}
+                >
+                  {name} <span>{renderSortMark(`custom:${name}`)}</span>
+                </th>
+              ))}
+              <th className="sortable" onClick={() => toggleSort('quantity')}>Остаток <span>{renderSortMark('quantity')}</span></th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pagedProducts.map((product) => {
+              const fieldMap = new Map((product.custom_fields || []).map((f) => [f.name, f.value]));
+              const ozonPhoto = String(fieldMap.get('Фото OZON') || '');
+              return (
+                <tr key={product.id}>
+                  <td>
+                    <button
+                      type="button"
+                      className="id-link-btn"
+                      onClick={() => navigate(`/products/${product.id}`)}
+                      title={`Открыть карточку товара #${product.id}`}
+                    >
+                      {product.id}
+                    </button>
+                  </td>
+                  <td>
+                    {ozonPhoto ? (
+                      <img className="product-mini-image" src={ozonPhoto} alt={product.name} loading="lazy" />
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td>
+                    <span className="cell-ellipsis cell-name" title={product.name}>{product.name}</span>
+                  </td>
+                  <td>
+                    <span className="cell-ellipsis" title={product.sku}>{product.sku}</span>
+                  </td>
+                  {fieldNames.map((name) => {
+                    const value = fieldMap.get(name) || '—';
+                    const isHexColumn = name.toLowerCase() === 'hex' || name.toLowerCase().includes('hex');
+                    const showSwatch = isHexColumn && isHexColor(value);
+
+                    return (
+                      <td key={name}>
+                        <span className="cell-ellipsis hex-cell" title={value}>
+                          {showSwatch && <span className="hex-swatch" style={{ backgroundColor: value }} />}
+                          {value}
+                        </span>
+                      </td>
+                    );
+                  })}
+                  <td>{product.quantity}</td>
+                  <td className="row-actions">
+                    <button
+                      className="btn btn-icon"
+                      onClick={() => openEdit(product)}
+                      aria-label="Изменить"
+                      title="Изменить"
+                    >
+                      <EditIcon />
+                    </button>
+                    <button
+                      className="btn btn-danger btn-icon"
+                      onClick={() => setDeleteCandidate(product)}
+                      aria-label="Удалить"
+                      title="Удалить"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {pagedProducts.length === 0 && (
+              <tr>
+                <td colSpan={fieldNames.length + 6} className="empty-row">
+                  Нет товаров для отображения
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {open && (
+        <div
+          className="modal-backdrop"
+          onClick={() => {
+            setOpen(false);
+            setErrors({});
+          }}
+        >
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>{form.id ? 'Редактировать товар' : 'Новый товар'}</h3>
+            <form onSubmit={submit} className="form-grid" noValidate>
+              <label>
+                Название*
+                <input
+                  className={`input ${errors.name ? 'input-error' : ''}`}
+                  value={form.name}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setForm((s) => ({ ...s, name: value }));
+                    if (errors.name && value.trim()) {
+                      setErrors((prev) => ({ ...prev, name: undefined }));
+                    }
+                  }}
+                />
+                <span className={`field-error ${errors.name ? '' : 'field-error-placeholder'}`}>
+                  {errors.name || ' '}
+                </span>
+              </label>
+              <label>
+                SKU*
+                <input
+                  className={`input ${errors.sku ? 'input-error' : ''}`}
+                  value={form.sku}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setForm((s) => ({ ...s, sku: value }));
+                    if (errors.sku && value.trim()) {
+                      setErrors((prev) => ({ ...prev, sku: undefined }));
+                    }
+                  }}
+                />
+                <span className={`field-error ${errors.sku ? '' : 'field-error-placeholder'}`}>
+                  {errors.sku || ' '}
+                </span>
+              </label>
+              <label>
+                Количество
+                <input
+                  className="input"
+                  type="number"
+                  value={form.quantity}
+                  onChange={(e) => setForm((s) => ({ ...s, quantity: e.target.value }))}
+                />
+              </label>
+              <label>
+                Описание
+                <textarea
+                  className="input"
+                  value={form.description || ''}
+                  onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
+                />
+              </label>
+
+              {fields.map((field, idx) => {
+                const value = form.custom_fields?.[idx]?.value ?? '';
+                const errorKey = `custom_${idx}`;
+                return (
+                  <label key={field.id || field.name}>
+                    {field.name}{field.required ? '*' : ''}
+                    {field.type === 'select' ? (
+                      <select
+                        className={`input ${errors[errorKey] ? 'input-error' : ''}`}
+                        value={value}
+                        onChange={(e) =>
+                          {
+                            const nextValue = e.target.value;
+                            setForm((s) => ({
+                              ...s,
+                              custom_fields: (s.custom_fields || []).map((item, itemIdx) =>
+                                itemIdx === idx ? { ...item, value: nextValue } : item
+                              )
+                            }));
+                            if (errors[errorKey] && String(nextValue).trim()) {
+                              setErrors((prev) => ({ ...prev, [errorKey]: undefined }));
+                            }
+                          }
+                        }
+                      >
+                        <option value="">-- Выберите --</option>
+                        {(field.options || []).map((option) => (
+                          <option key={`${field.name}-${option}`} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        className={`input ${errors[errorKey] ? 'input-error' : ''}`}
+                        type={field.type === 'number' ? 'number' : field.type === 'color' ? 'color' : 'text'}
+                        value={value}
+                        onChange={(e) =>
+                          {
+                            const nextValue = e.target.value;
+                            setForm((s) => ({
+                              ...s,
+                              custom_fields: (s.custom_fields || []).map((item, itemIdx) =>
+                                itemIdx === idx ? { ...item, value: nextValue } : item
+                              )
+                            }));
+                            if (errors[errorKey] && String(nextValue).trim()) {
+                              setErrors((prev) => ({ ...prev, [errorKey]: undefined }));
+                            }
+                          }
+                        }
+                      />
+                    )}
+                    <span className={`field-error ${errors[errorKey] ? '' : 'field-error-placeholder'}`}>
+                      {errors[errorKey] || ' '}
+                    </span>
+                  </label>
+                );
+              })}
+
+              <div className="modal-actions">
+                <button
+                  className="btn"
+                  type="button"
+                  onClick={() => {
+                    setOpen(false);
+                    setErrors({});
+                  }}
+                >
+                  Отмена
+                </button>
+                <button className="btn btn-primary btn-save" type="submit" disabled={saveMutation.isPending}>Сохранить</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {importOpen && (
+        <div className="modal-backdrop" onClick={closeImportModal}>
+          <div className="modal import-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Импорт товаров из Excel</h3>
+            <p className="import-subtitle">
+              Шаг {importStep} из 2. Импортируются только новые SKU (с учетом trim), остаток для новых товаров = 0.
+            </p>
+
+            {importStep === 1 && (
+              <div className="import-step">
+                <label className="btn btn-primary import-file-btn">
+                  Выбрать файл Excel
+                  <input
+                    type="file"
+                    accept=".xlsx,.xls"
+                    className="hidden-input"
+                    onChange={(e) => handleImportFile(e.target.files?.[0])}
+                  />
+                </label>
+                {importFileName && <div className="import-file-name">Файл: {importFileName}</div>}
+                {importSheets.length > 0 && (
+                  <div className="import-sheet-picker">
+                    <label>
+                      Лист файла
+                      <select
+                        className="input"
+                        value={selectedSheet}
+                        onChange={(e) => setSelectedSheet(e.target.value)}
+                      >
+                        {importSheets.map((sheet) => (
+                          <option key={sheet.name} value={sheet.name}>
+                            {sheet.name} ({sheet.rows.length} строк)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button className="btn btn-primary" type="button" onClick={continueToMapping}>
+                      Продолжить
+                    </button>
+                  </div>
+                )}
+                {importError && <div className="import-error">{importError}</div>}
+              </div>
+            )}
+
+            {importStep === 2 && (
+              <div className="import-step">
+                <div className="import-mapping-head">
+                  <div>Файл: <strong>{importFileName}</strong></div>
+                  <div>Строк данных: <strong>{importRows.length}</strong></div>
+                </div>
+                {importSheets.length > 0 && (
+                  <div className="import-sheet-picker import-sheet-picker-inline">
+                    <label>
+                      Лист файла
+                      <select
+                        className="input"
+                        value={selectedSheet}
+                        onChange={(e) => {
+                          const nextSheet = e.target.value;
+                          applySelectedSheet(nextSheet);
+                        }}
+                      >
+                        {importSheets.map((sheet) => (
+                          <option key={sheet.name} value={sheet.name}>
+                            {sheet.name} ({sheet.rows.length} строк)
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+
+                <div className="mapping-grid">
+                  <div className="mapping-grid-head">
+                    <span>Колонка Excel</span>
+                    <span>Пример значения</span>
+                    <span>Сопоставление</span>
+                  </div>
+                  {importHeaders.map((header, index) => (
+                    <div className="mapping-row" key={`${header}-${index}`}>
+                      <div className="mapping-col-name">{header || `Колонка ${index + 1}`}</div>
+                      <div className="mapping-col-sample" title={String(importRows[0]?.[index] ?? '')}>
+                        {String(importRows[0]?.[index] ?? '—')}
+                      </div>
+                      <div>
+                        <select
+                          className="input mapping-select"
+                          value={importMapping[index] || ''}
+                          onChange={(e) => setMappingValue(index, e.target.value)}
+                        >
+                          {importTargets.map((target) => (
+                            <option key={`${index}-${target.key || 'none'}`} value={target.key}>
+                              {target.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="import-preview">
+                  <h4>Предпросмотр (все строки)</h4>
+                  <div className="table-wrap import-preview-table">
+                    <table className="table compact">
+                      <thead>
+                        <tr>
+                          {importHeaders.map((header, index) => (
+                            <th key={`preview-head-${index}`}>{header || `Колонка ${index + 1}`}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importRows.map((row, rowIdx) => (
+                          <tr key={`preview-row-${rowIdx}`}>
+                            {importHeaders.map((_, colIdx) => (
+                              <td key={`preview-cell-${rowIdx}-${colIdx}`}>
+                                <span className="cell-ellipsis" title={String(row[colIdx] ?? '')}>
+                                  {String(row[colIdx] ?? '') || '—'}
+                                </span>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {importError && <div className="import-error">{importError}</div>}
+                {importStats && (
+                  <div className="import-result">
+                    Добавлено: <strong>{importStats.created}</strong> ·
+                    Дубликатов: <strong>{importStats.skippedDuplicate}</strong> ·
+                    Пропущено (пустые name/sku): <strong>{importStats.skippedInvalid}</strong>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="modal-actions">
+              {importStep === 2 && (
+                <button className="btn" type="button" onClick={() => setImportStep(1)}>Назад</button>
+              )}
+              <button className="btn" type="button" onClick={closeImportModal}>Закрыть</button>
+              {importStep === 2 && (
+                <button
+                  className="btn btn-primary btn-save"
+                  type="button"
+                  onClick={() => importMutation.mutate()}
+                  disabled={importMutation.isPending || importRows.length === 0}
+                >
+                  {importMutation.isPending ? 'Импорт...' : 'Импортировать'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteCandidate && (
+        <div className="modal-backdrop" onClick={() => setDeleteCandidate(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Удалить товар?</h3>
+            <p>
+              Вы уверены, что хотите удалить товар
+              {' '}
+              <strong>{deleteCandidate.name}</strong>
+              {' '}
+              (
+              <strong>{deleteCandidate.sku}</strong>
+              )?
+            </p>
+            <div className="modal-actions">
+              <button className="btn" type="button" onClick={() => setDeleteCandidate(null)}>
+                Отмена
+              </button>
+              <button
+                className="btn btn-danger"
+                type="button"
+                onClick={() => {
+                  deleteMutation.mutate(deleteCandidate.id);
+                  setDeleteCandidate(null);
+                }}
+                disabled={deleteMutation.isPending}
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
