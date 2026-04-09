@@ -442,7 +442,6 @@ body {
 
 @media (min-width: 1920px) {
   .page {
-    max-width: 1600px;
     padding: 40px 48px;
   }
 
