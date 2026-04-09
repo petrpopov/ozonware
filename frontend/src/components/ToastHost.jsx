@@ -6,9 +6,10 @@ export default function ToastHost() {
   const removeToast = useUiStore((s) => s.removeToast);
 
   useEffect(() => {
-    const timers = toasts.map((toast) =>
-      setTimeout(() => removeToast(toast.id), 3000)
-    );
+    const timers = toasts.map((toast) => {
+      const duration = toast.kind === 'error' ? 5000 : 3000;
+      return setTimeout(() => removeToast(toast.id), duration);
+    });
 
     return () => timers.forEach(clearTimeout);
   }, [toasts, removeToast]);
@@ -16,7 +17,13 @@ export default function ToastHost() {
   return (
     <div className="toast-host">
       {toasts.map((toast) => (
-        <div key={toast.id} className={`toast toast-${toast.kind}`}>
+        <div
+          key={toast.id}
+          className={`toast toast-${toast.kind}`}
+          onClick={() => removeToast(toast.id)}
+          style={{ cursor: 'pointer' }}
+          title="Закрыть"
+        >
           {toast.message}
         </div>
       ))}

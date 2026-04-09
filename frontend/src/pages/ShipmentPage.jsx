@@ -83,7 +83,8 @@ export default function ShipmentPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editForm, setEditForm] = useState(null);
-  const [fbsSyncOpen, setFbsSyncOpen] = useState(false);
+  const [shipmentSyncOpen, setShipmentSyncOpen] = useState(false);
+  const [shipmentSyncTab, setShipmentSyncTab] = useState('fbs');
   const [fbsSyncRunning, setFbsSyncRunning] = useState(false);
   const [fbsSyncMessages, setFbsSyncMessages] = useState([]);
   const [fbsSyncError, setFbsSyncError] = useState('');
@@ -96,7 +97,6 @@ export default function ShipmentPage() {
   const [fbsCsvAnalyzeLoading, setFbsCsvAnalyzeLoading] = useState(false);
   const [fbsCsvApplyReport, setFbsCsvApplyReport] = useState(null);
   const [expandedFbsDay, setExpandedFbsDay] = useState('');
-  const [fboSyncOpen, setFboSyncOpen] = useState(false);
   const [fboSyncRunning, setFboSyncRunning] = useState(false);
   const [fboSyncMessages, setFboSyncMessages] = useState([]);
   const [fboSyncError, setFboSyncError] = useState('');
@@ -432,30 +432,28 @@ export default function ShipmentPage() {
 
   const openFbsSyncModal = () => {
     resetFbsSyncModalState();
-    setFbsSyncOpen(true);
+    setShipmentSyncTab('fbs');
+    setShipmentSyncOpen(true);
   };
 
   const openFboSyncModal = () => {
     resetFboSyncModalState();
-    setFboSyncOpen(true);
+    setShipmentSyncTab('fbo');
+    setShipmentSyncOpen(true);
   };
 
-  const closeFbsSyncModal = () => {
+  const closeShipmentSyncModal = () => {
     if (fbsSourceRef.current) {
       fbsSourceRef.current.close();
       fbsSourceRef.current = null;
     }
-    setFbsSyncRunning(false);
-    setFbsSyncOpen(false);
-  };
-
-  const closeFboSyncModal = () => {
     if (fboSourceRef.current) {
       fboSourceRef.current.close();
       fboSourceRef.current = null;
     }
+    setFbsSyncRunning(false);
     setFboSyncRunning(false);
-    setFboSyncOpen(false);
+    setShipmentSyncOpen(false);
   };
 
   const loadFbsStats = async () => {
@@ -754,32 +752,18 @@ export default function ShipmentPage() {
   }, [editOpen]);
 
   useEffect(() => {
-    if (!fbsSyncOpen) {
+    if (!shipmentSyncOpen) {
       return undefined;
     }
 
     const onKeyDown = (event) => {
       if (event.key === 'Escape') {
-        closeFbsSyncModal();
+        closeShipmentSyncModal();
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [fbsSyncOpen]);
-
-  useEffect(() => {
-    if (!fboSyncOpen) {
-      return undefined;
-    }
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeFboSyncModal();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [fboSyncOpen]);
+  }, [shipmentSyncOpen]);
 
   useEffect(() => () => {
     if (fbsSourceRef.current) {
@@ -952,23 +936,37 @@ export default function ShipmentPage() {
         </div>
       )}
 
-      {fbsSyncOpen && (
-        <div className="modal-backdrop" onClick={closeFbsSyncModal}>
+      {shipmentSyncOpen && (
+        <div className="modal-backdrop" onClick={closeShipmentSyncModal}>
           <div className="modal import-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Синхронизация FBS</h3>
-            <p className="import-subtitle">
-              Нажмите &quot;Синхронизация FBS&quot;. После завершения ниже появится разбивка по дням (последние сверху).
-            </p>
+            <h3>Синхронизация Ozon</h3>
+            <div className="shipment-sync-tabs">
+              <button
+                className={`shipment-sync-tab ${shipmentSyncTab === 'fbs' ? 'active' : ''}`}
+                type="button"
+                onClick={() => setShipmentSyncTab('fbs')}
+              >
+                FBS
+              </button>
+              <button
+                className={`shipment-sync-tab ${shipmentSyncTab === 'fbo' ? 'active' : ''}`}
+                type="button"
+                onClick={() => setShipmentSyncTab('fbo')}
+              >
+                FBO
+              </button>
+            </div>
 
-            {fbsSyncMessages.length > 0 && (
-              <div className="import-result">
-                {fbsSyncMessages.map((message, index) => (
-                  <div key={`${message}-${index}`}>{message}</div>
-                ))}
-              </div>
-            )}
-
-            {fbsSyncError && <div className="import-error">{fbsSyncError}</div>}
+            {shipmentSyncTab === 'fbs' && (
+              <div className="shipment-sync-panel">
+                {fbsSyncMessages.length > 0 && (
+                  <div className="import-result">
+                    {fbsSyncMessages.map((message, index) => (
+                      <div key={`${message}-${index}`}>{message}</div>
+                    ))}
+                  </div>
+                )}
+                {fbsSyncError && <div className="import-error">{fbsSyncError}</div>}
 
             <div className="card">
               <h4>Импорт FBS из CSV</h4>
@@ -1216,33 +1214,25 @@ export default function ShipmentPage() {
               >
                 {applyFbsCsvMutation.isPending ? 'Проведение...' : 'Провести FBS из CSV'}
               </button>
-              <button className="btn" type="button" onClick={closeFbsSyncModal}>
+              <button className="btn" type="button" onClick={closeShipmentSyncModal}>
                 Закрыть
               </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {fboSyncOpen && (
-        <div className="modal-backdrop" onClick={closeFboSyncModal}>
-          <div className="modal import-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Синхронизация FBO</h3>
-            <p className="import-subtitle">
-              Загружаются поставки COMPLETED, затем их bundle и состав товаров. Данные сохраняются в БД и показываются по дням.
-            </p>
-
-            {fboSyncMessages.length > 0 && (
-              <div className="import-result">
-                {fboSyncMessages.map((message, index) => (
-                  <div key={`${message}-${index}`}>{message}</div>
-                ))}
               </div>
             )}
 
-            {fboSyncError && <div className="import-error">{fboSyncError}</div>}
+            {shipmentSyncTab === 'fbo' && (
+              <div className="shipment-sync-panel">
+                {fboSyncMessages.length > 0 && (
+                  <div className="import-result">
+                    {fboSyncMessages.map((message, index) => (
+                      <div key={`${message}-${index}`}>{message}</div>
+                    ))}
+                  </div>
+                )}
+                {fboSyncError && <div className="import-error">{fboSyncError}</div>}
 
-            {sortedFboDays.length > 0 && (
+                {sortedFboDays.length > 0 && (
               <div className="stack-sm">
                 <div className="import-result">
                   Всего поставок: <strong>{fboSummary.supplies}</strong> · Всего товаров (шт):{' '}
@@ -1324,35 +1314,37 @@ export default function ShipmentPage() {
               </div>
             )}
 
-            <div className="modal-actions">
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={() => {
-                  if (fboSyncRunning) {
-                    cancelFboSyncMutation.mutate();
-                    return;
-                  }
-                  startFboSync();
-                }}
-                disabled={cancelFboSyncMutation.isPending}
-              >
-                {fboSyncRunning ? 'Отмена' : 'Синхронизация FBO'}
-              </button>
-              {fboSyncCompleted && (
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  onClick={() => applyFboMutation.mutate(null)}
-                  disabled={applyFboMutation.isPending || sortedFboDays.length === 0}
-                >
-                  {applyFboMutation.isPending ? 'Применение...' : 'Применить FBO'}
-                </button>
-              )}
-              <button className="btn" type="button" onClick={closeFboSyncModal}>
-                Закрыть
-              </button>
-            </div>
+                <div className="modal-actions">
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => {
+                      if (fboSyncRunning) {
+                        cancelFboSyncMutation.mutate();
+                        return;
+                      }
+                      startFboSync();
+                    }}
+                    disabled={cancelFboSyncMutation.isPending}
+                  >
+                    {fboSyncRunning ? 'Отмена' : 'Синхронизация FBO'}
+                  </button>
+                  {fboSyncCompleted && (
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      onClick={() => applyFboMutation.mutate(null)}
+                      disabled={applyFboMutation.isPending || sortedFboDays.length === 0}
+                    >
+                      {applyFboMutation.isPending ? 'Применение...' : 'Применить FBO'}
+                    </button>
+                  )}
+                  <button className="btn" type="button" onClick={closeShipmentSyncModal}>
+                    Закрыть
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

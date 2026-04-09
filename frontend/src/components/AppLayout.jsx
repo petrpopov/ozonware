@@ -36,9 +36,8 @@ export default function AppLayout() {
     <div className="page">
       <header className="header">
         <div className="header-top">
-          <div>
+          <div className="header-brand">
             <h1>Складской учет</h1>
-            <p>Управление товарами, операциями и остатками.</p>
           </div>
           <button
             type="button"

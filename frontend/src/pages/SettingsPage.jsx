@@ -297,7 +297,7 @@ export default function SettingsPage() {
         </div>
         <div className="modal-actions">
           <button className="btn" onClick={() => setFields((prev) => [...prev, { ...defaultField }])}>+ Поле</button>
-          <button className="btn btn-primary" onClick={() => saveFieldsMutation.mutate()} disabled={saveFieldsMutation.isPending}>Сохранить поля</button>
+          <button className="btn btn-primary" onClick={() => saveFieldsMutation.mutate()} disabled={saveFieldsMutation.isPending}>Сохранить</button>
         </div>
       </section>
 

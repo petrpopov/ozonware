@@ -173,6 +173,12 @@ export default function ProductCardPage() {
 
   return (
     <div className="stack">
+      <nav className="breadcrumbs" aria-label="Навигация">
+        <button type="button" className="breadcrumbs-link" onClick={() => navigate('/products')}>Товары</button>
+        <span className="breadcrumbs-sep">/</span>
+        <span className="breadcrumbs-current">{form.name || `#${form.id}`}</span>
+      </nav>
+
       <div className="toolbar operation-actions">
         <button className="btn operation-action-btn" type="button" onClick={() => navigate('/products')}>
           Назад к товарам

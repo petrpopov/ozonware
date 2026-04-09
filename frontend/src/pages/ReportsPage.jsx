@@ -193,7 +193,7 @@ export default function ReportsPage() {
             onClick={() => importMutation.mutate({ source: importSource, file_name: importFileName, rows: importRows })}
             disabled={importMutation.isPending || importRows.length === 0}
           >
-            {importMutation.isPending ? 'Импорт...' : 'Сохранить в систему'}
+            {importMutation.isPending ? 'Импорт...' : 'Импортировать'}
           </button>
         </div>
       </section>

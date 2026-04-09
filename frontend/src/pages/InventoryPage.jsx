@@ -483,12 +483,17 @@ export default function InventoryPage() {
         <div className="modal-backdrop" onClick={() => setInventoryOpen(false)}>
           <div className="modal import-modal inventory-modal" onClick={(event) => event.stopPropagation()}>
             <h3>Инвентаризация по коробам</h3>
-            <p className="import-subtitle">
-              Шаг {inventoryStep} из 2.
-              {inventoryStep === 1
-                ? ' Сканируйте штрихкод или введите SKU/название. Enter добавляет +1 в текущий короб.'
-                : ' Проверка расхождений перед применением.'}
-            </p>
+            <div className="inventory-stepper">
+              <div className={`inventory-step ${inventoryStep === 1 ? 'active' : 'done'}`}>
+                <span className="inventory-step-num">1</span>
+                <span className="inventory-step-label">Сканирование</span>
+              </div>
+              <div className="inventory-step-arrow">→</div>
+              <div className={`inventory-step ${inventoryStep === 2 ? 'active' : ''}`}>
+                <span className="inventory-step-num">2</span>
+                <span className="inventory-step-label">Проверка</span>
+              </div>
+            </div>
 
             {inventoryStep === 1 && (
               <>
@@ -762,7 +767,7 @@ export default function InventoryPage() {
                     onClick={applyInventory}
                     disabled={createMutation.isPending || reviewRows.length === 0}
                   >
-                    {createMutation.isPending ? 'Применение...' : 'Завершить инвентаризацию'}
+                    {createMutation.isPending ? 'Проведение...' : 'Провести инвентаризацию'}
                   </button>
                 </>
               )}

@@ -683,7 +683,7 @@ export default function ReceiptPage() {
                 onClick={submitImportedReceipt}
                 disabled={importMutation.isPending || importPreview.foundEntries.length === 0}
               >
-                {importMutation.isPending ? 'Проведение...' : 'Провести приход из Excel'}
+                {importMutation.isPending ? 'Проведение...' : 'Провести'}
               </button>
             </div>
           </div>
@@ -767,7 +767,7 @@ export default function ReceiptPage() {
                 onClick={saveEditOperation}
                 disabled={updateMutation.isPending || editForm.items.length === 0}
               >
-                {updateMutation.isPending ? 'Сохранение...' : 'Сохранить изменения'}
+                {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
               </button>
             </div>
           </div>
