@@ -899,6 +899,33 @@ body {
   white-space: nowrap;
 }
 
+/* Products table: constrain wide table, allow name wrapping */
+.history-pager ~ .table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.history-pager ~ .table-wrap .table {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed;
+}
+
+.history-pager ~ .table-wrap .table th {
+  white-space: nowrap;
+}
+
+.history-pager ~ .table-wrap .table td {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.history-pager ~ .table-wrap .cell-ellipsis {
+  max-width: none;
+  white-space: normal;
+  word-break: break-word;
+}
+
 /* Inventory page: constrain history table (main page, not modal) */
 .operation-actions + .card .table-wrap {
   max-width: 100%;
