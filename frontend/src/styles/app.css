@@ -899,6 +899,54 @@ body {
   white-space: nowrap;
 }
 
+/* Inventory page: constrain history table (main page, not modal) */
+.operation-actions + .card .table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.operation-actions + .card .table {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed;
+}
+
+.operation-actions + .card .table th {
+  white-space: nowrap;
+}
+
+.operation-actions + .card .table td {
+  white-space: normal;
+  word-break: break-word;
+}
+
+.operation-actions + .card .cell-ellipsis {
+  max-width: none;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* Column widths for inventory history table (4 cols: ID, Дата, Расхождений, Примечание) */
+.operation-actions + .card .table th:nth-child(1),
+.operation-actions + .card .table td:nth-child(1) {
+  width: 70px;
+}
+
+.operation-actions + .card .table th:nth-child(2),
+.operation-actions + .card .table td:nth-child(2) {
+  width: 110px;
+}
+
+.operation-actions + .card .table th:nth-child(3),
+.operation-actions + .card .table td:nth-child(3) {
+  width: 110px;
+}
+
+.operation-actions + .card .table th:nth-child(4),
+.operation-actions + .card .table td:nth-child(4) {
+  width: auto;
+}
+
 /* Inventory modal tables: constrain width, allow name wrapping */
 .inventory-modal .table-wrap {
   max-width: 100%;
