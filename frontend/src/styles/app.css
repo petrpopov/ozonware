@@ -56,9 +56,23 @@ body {
 }
 
 .page {
-  max-width: 1400px;
+  max-width: none;
   margin: 0 auto;
   padding: 32px 40px;
+}
+
+@media (min-width: 1920px) {
+  .page {
+    padding: 40px 48px;
+  }
+
+  .cell-ellipsis {
+    max-width: 300px;
+  }
+
+  .cell-name {
+    max-width: 420px;
+  }
 }
 
 .header-top {
@@ -899,31 +913,10 @@ body {
   white-space: nowrap;
 }
 
-/* Products table: constrain wide table, allow name wrapping */
+/* Products table: allow horizontal scroll with full-width container */
 .history-pager ~ .table-wrap {
   max-width: 100%;
   overflow-x: auto;
-}
-
-.history-pager ~ .table-wrap .table {
-  width: 100% !important;
-  min-width: 0 !important;
-  table-layout: fixed;
-}
-
-.history-pager ~ .table-wrap .table th {
-  white-space: nowrap;
-}
-
-.history-pager ~ .table-wrap .table td {
-  white-space: normal;
-  word-break: break-word;
-}
-
-.history-pager ~ .table-wrap .cell-ellipsis {
-  max-width: none;
-  white-space: normal;
-  word-break: break-word;
 }
 
 /* Inventory page: constrain history table (main page, not modal) */
@@ -932,156 +925,15 @@ body {
   overflow-x: auto;
 }
 
-.operation-actions + .card .table {
-  width: 100% !important;
-  min-width: 0 !important;
-  table-layout: fixed;
-}
-
-.operation-actions + .card .table th {
-  white-space: nowrap;
-}
-
-.operation-actions + .card .table td {
-  white-space: normal;
-  word-break: break-word;
-}
-
-.operation-actions + .card .cell-ellipsis {
-  max-width: none;
-  white-space: normal;
-  word-break: break-word;
-}
-
-/* Column widths for inventory history table (4 cols: ID, Дата, Расхождений, Примечание) */
-.operation-actions + .card .table th:nth-child(1),
-.operation-actions + .card .table td:nth-child(1) {
-  width: 70px;
-}
-
-.operation-actions + .card .table th:nth-child(2),
-.operation-actions + .card .table td:nth-child(2) {
-  width: 110px;
-}
-
-.operation-actions + .card .table th:nth-child(3),
-.operation-actions + .card .table td:nth-child(3) {
-  width: 110px;
-}
-
-.operation-actions + .card .table th:nth-child(4),
-.operation-actions + .card .table td:nth-child(4) {
-  width: auto;
-}
-
-/* Inventory modal tables: constrain width, allow name wrapping */
+/* Inventory modal tables: allow horizontal scroll */
 .inventory-modal .table-wrap {
   max-width: 100%;
   overflow-x: auto;
 }
 
 .inventory-modal .table {
-  width: 100% !important;
-  min-width: 0 !important;
-  table-layout: fixed;
-}
-
-/* Override nowrap for inventory table cells so name column can wrap */
-.inventory-modal .table th,
-.inventory-modal .table td {
-  white-space: normal;
-  word-break: break-word;
-}
-
-/* Keep header labels nowrap */
-.inventory-modal .table th {
-  white-space: nowrap;
-}
-
-/* Name column in inventory modal: allow natural wrapping */
-.inventory-modal .cell-ellipsis {
-  max-width: none;
-  white-space: normal;
-  word-break: break-word;
-}
-
-/* Column widths for inventory table (6 cols: ID, Фото, Товар, SKU, Кол-во, Действия) */
-.inventory-modal .inventory-box-table table th:nth-child(1),
-.inventory-modal .inventory-box-table table td:nth-child(1) {
-  width: 60px;
-}
-
-.inventory-modal .inventory-box-table table th:nth-child(2),
-.inventory-modal .inventory-box-table table td:nth-child(2) {
-  width: 44px;
-}
-
-.inventory-modal .inventory-box-table table th:nth-child(3),
-.inventory-modal .inventory-box-table table td:nth-child(3) {
-  width: auto;
-}
-
-.inventory-modal .inventory-box-table table th:nth-child(4),
-.inventory-modal .inventory-box-table table td:nth-child(4) {
-  width: 100px;
-}
-
-.inventory-modal .inventory-box-table table th:nth-child(5),
-.inventory-modal .inventory-box-table table td:nth-child(5) {
-  width: 140px;
-}
-
-.inventory-modal .inventory-box-table table th:nth-child(6),
-.inventory-modal .inventory-box-table table td:nth-child(6) {
-  width: 40px;
-}
-
-/* Completed boxes cards table (5 cols, no actions) */
-.inventory-box-card .table {
-  width: 100% !important;
-  min-width: 0 !important;
-  table-layout: fixed;
-}
-
-.inventory-box-card .table th,
-.inventory-box-card .table td {
-  white-space: normal;
-  word-break: break-word;
-}
-
-.inventory-box-card .table th {
-  white-space: nowrap;
-}
-
-.inventory-box-card .cell-ellipsis {
-  max-width: none;
-  white-space: normal;
-  word-break: break-word;
-}
-
-.inventory-box-card .table th:nth-child(1),
-.inventory-box-card .table td:nth-child(1) {
-  width: 60px;
-}
-
-.inventory-box-card .table th:nth-child(2),
-.inventory-box-card .table td:nth-child(2) {
-  width: 44px;
-}
-
-.inventory-box-card .table th:nth-child(3),
-.inventory-box-card .table td:nth-child(3) {
-  width: auto;
-}
-
-.inventory-box-card .table th:nth-child(4),
-.inventory-box-card .table td:nth-child(4) {
-  width: 100px;
-}
-
-.inventory-box-card .table th:nth-child(5),
-.inventory-box-card .table td:nth-child(5) {
-  width: 70px;
+  width: max-content;
+  min-width: 100%;
 }
 
 .import-modal {
