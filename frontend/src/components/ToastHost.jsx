@@ -14,19 +14,35 @@ export default function ToastHost() {
     return () => timers.forEach(clearTimeout);
   }, [toasts, removeToast]);
 
+  const politeToasts = toasts.filter((t) => t.kind !== 'error');
+  const urgentToasts = toasts.filter((t) => t.kind === 'error');
+
   return (
     <div className="toast-host">
-      {toasts.map((toast) => (
-        <div
-          key={toast.id}
-          className={`toast toast-${toast.kind}`}
-          onClick={() => removeToast(toast.id)}
-          style={{ cursor: 'pointer' }}
-          title="Закрыть"
-        >
-          {toast.message}
-        </div>
-      ))}
+      <div role="status" aria-live="polite" aria-atomic="false">
+        {politeToasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`toast toast-${toast.kind} toast-clickable`}
+            onClick={() => removeToast(toast.id)}
+            aria-label={`${toast.message} — нажмите, чтобы закрыть`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
+      <div role="alert" aria-live="assertive" aria-atomic="true">
+        {urgentToasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`toast toast-${toast.kind} toast-clickable`}
+            onClick={() => removeToast(toast.id)}
+            aria-label={`Ошибка: ${toast.message} — нажмите, чтобы закрыть`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

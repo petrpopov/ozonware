@@ -5,6 +5,8 @@ import { services } from '../api/services.js';
 import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
 import { useUiStore } from '../store/useUiStore.js';
 import { EditIcon, TrashIcon } from '../components/Icons.jsx';
+import Modal from '../components/Modal.jsx';
+import Dropdown from '../components/Dropdown.jsx';
 
 const emptyForm = {
   id: null,
@@ -557,27 +559,6 @@ export default function ProductsPage() {
     setOpen(true);
   };
 
-  useEffect(() => {
-    if (!open && !importOpen && !deleteCandidate) return undefined;
-
-    const handleEsc = (event) => {
-      if (event.key === 'Escape') {
-        if (open) {
-          setOpen(false);
-          setErrors({});
-        }
-        if (importOpen) {
-          closeImportModal();
-        }
-        if (deleteCandidate) {
-          setDeleteCandidate(null);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleEsc);
-    return () => window.removeEventListener('keydown', handleEsc);
-  }, [open, importOpen, deleteCandidate]);
 
   useEffect(() => {
     setPage(1);
@@ -650,20 +631,35 @@ export default function ProductsPage() {
   return (
     <section>
       <div className="toolbar">
+        <button className="btn btn-primary" onClick={openCreate}>+ Добавить</button>
+        <div className="toolbar__sep" />
+        <Dropdown
+          label="Импорт"
+          items={[
+            { label: 'Из Excel', onClick: () => setImportOpen(true) },
+            {
+              label: syncOzonProductsMutation.isPending ? 'Синхр...' : 'Синхр. OZON',
+              onClick: () => syncOzonProductsMutation.mutate(),
+              disabled: syncOzonProductsMutation.isPending
+            }
+          ]}
+        />
+        <Dropdown
+          label="Экспорт"
+          items={[
+            { label: 'Excel', onClick: exportExcel },
+            { label: 'CSV', onClick: exportCsv }
+          ]}
+        />
+        <div className="toolbar__sep" />
+        <button className="btn" onClick={() => productsQuery.refetch()}>⟳ Обновить</button>
+        <div className="toolbar__spacer" />
         <input
           className="input"
           placeholder="Поиск по названию / SKU"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <button className="btn" onClick={() => syncOzonProductsMutation.mutate()} disabled={syncOzonProductsMutation.isPending}>
-          {syncOzonProductsMutation.isPending ? 'Синхронизация...' : 'Синхр. товары OZON'}
-        </button>
-        <button className="btn" onClick={() => setImportOpen(true)}>Импорт Excel</button>
-        <button className="btn" onClick={exportExcel} title="Скачать видимую таблицу в Excel">Excel</button>
-        <button className="btn" onClick={exportCsv} title="Скачать видимую таблицу в CSV">CSV</button>
-        <button className="btn" onClick={() => productsQuery.refetch()}>Обновить</button>
-        <button className="btn btn-primary" onClick={openCreate}>+ Добавить</button>
       </div>
 
       <div className="products-info">
@@ -676,9 +672,9 @@ export default function ProductsPage() {
           Показывать товары с нулевым остатком
         </label>
         <div className="products-stats">
-          <span className="stat-pill">Артикулов: <strong>{productsStats.totalSkus}</strong></span>
-          <span className="stat-pill">В наличии: <strong>{productsStats.inStockSkus}</strong></span>
-          <span className="stat-pill">Единиц на складе: <strong>{productsStats.inStockUnits}</strong></span>
+          <span className="stat-pill"><span className="stat-label">Артикулов</span><span className="stat-value">{productsStats.totalSkus}</span></span>
+          <span className="stat-pill"><span className="stat-label">В наличии</span><span className="stat-value">{productsStats.inStockSkus}</span></span>
+          <span className="stat-pill"><span className="stat-label">Ед. на складе</span><span className="stat-value">{productsStats.inStockUnits}</span></span>
         </div>
       </div>
 
@@ -759,7 +755,7 @@ export default function ProductsPage() {
                       type="button"
                       className="id-link-btn"
                       onClick={() => navigate(`/products/${product.id}`)}
-                      title={`Открыть карточку товара #${product.id}`}
+                      aria-label={`Открыть карточку товара #${product.id}`}
                     >
                       {product.id}
                     </button>
@@ -797,7 +793,6 @@ export default function ProductsPage() {
                       className="btn btn-icon"
                       onClick={() => openEdit(product)}
                       aria-label="Изменить"
-                      title="Изменить"
                     >
                       <EditIcon />
                     </button>
@@ -805,7 +800,6 @@ export default function ProductsPage() {
                       className="btn btn-danger btn-icon"
                       onClick={() => setDeleteCandidate(product)}
                       aria-label="Удалить"
-                      title="Удалить"
                     >
                       <TrashIcon />
                     </button>
@@ -815,8 +809,16 @@ export default function ProductsPage() {
             })}
             {pagedProducts.length === 0 && (
               <tr>
-                <td colSpan={fieldNames.length + 6} className="empty-row">
-                  Нет товаров для отображения
+                <td colSpan={fieldNames.length + 6} style={{ padding: 0, border: 'none' }}>
+                  <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+                    <p style={{ margin: '0 0 6px', fontWeight: 500, color: 'var(--text)' }}>Товары не найдены</p>
+                    <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                      Попробуйте изменить фильтр или добавьте новый товар
+                    </p>
+                    <button className="btn" type="button" onClick={openCreate}>
+                      Добавить товар
+                    </button>
+                  </div>
                 </td>
               </tr>
             )}
@@ -824,154 +826,174 @@ export default function ProductsPage() {
         </table>
       </div>
 
-      {open && (
-        <div
-          className="modal-backdrop"
-          onClick={() => {
-            setOpen(false);
-            setErrors({});
-          }}
-        >
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>{form.id ? 'Редактировать товар' : 'Новый товар'}</h3>
-            <form onSubmit={submit} className="form-grid" noValidate>
-              <label>
-                Название*
-                <input
-                  className={`input ${errors.name ? 'input-error' : ''}`}
-                  value={form.name}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setForm((s) => ({ ...s, name: value }));
-                    if (errors.name && value.trim()) {
-                      setErrors((prev) => ({ ...prev, name: undefined }));
-                    }
-                  }}
-                />
-                <span className={`field-error ${errors.name ? '' : 'field-error-placeholder'}`}>
-                  {errors.name || ' '}
+      <Modal
+        open={open}
+        onClose={() => { setOpen(false); setErrors({}); }}
+        title={form.id ? 'Редактировать товар' : 'Новый товар'}
+        size="sm"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn-cancel"
+              onClick={() => { setOpen(false); setErrors({}); }}
+            >
+              Отмена
+            </button>
+            <button
+              type="submit"
+              form="product-form"
+              className="btn btn-primary"
+              disabled={saveMutation.isPending}
+            >
+              Сохранить
+            </button>
+          </>
+        }
+      >
+        <form id="product-form" onSubmit={submit} className="form-grid form-grid--2col" noValidate>
+          <label>
+            Название*
+            <input
+              className={`input ${errors.name ? 'input-error' : ''}`}
+              value={form.name}
+              onChange={(e) => {
+                const value = e.target.value;
+                setForm((s) => ({ ...s, name: value }));
+                if (errors.name && value.trim()) {
+                  setErrors((prev) => ({ ...prev, name: undefined }));
+                }
+              }}
+            />
+            <span className={`field-error ${errors.name ? '' : 'field-error-placeholder'}`}>
+              {errors.name || ' '}
+            </span>
+          </label>
+          <label>
+            SKU*
+            <input
+              className={`input ${errors.sku ? 'input-error' : ''}`}
+              value={form.sku}
+              onChange={(e) => {
+                const value = e.target.value;
+                setForm((s) => ({ ...s, sku: value }));
+                if (errors.sku && value.trim()) {
+                  setErrors((prev) => ({ ...prev, sku: undefined }));
+                }
+              }}
+            />
+            <span className={`field-error ${errors.sku ? '' : 'field-error-placeholder'}`}>
+              {errors.sku || ' '}
+            </span>
+          </label>
+          <label>
+            Количество
+            <input
+              className="input"
+              type="number"
+              value={form.quantity}
+              onChange={(e) => setForm((s) => ({ ...s, quantity: e.target.value }))}
+            />
+          </label>
+
+          {fields.map((field, idx) => {
+            const value = form.custom_fields?.[idx]?.value ?? '';
+            const errorKey = `custom_${idx}`;
+            return (
+              <label key={field.id || field.name}>
+                {field.name}{field.required ? '*' : ''}
+                {field.type === 'select' ? (
+                  <select
+                    className={`input ${errors[errorKey] ? 'input-error' : ''}`}
+                    value={value}
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      setForm((s) => ({
+                        ...s,
+                        custom_fields: (s.custom_fields || []).map((item, itemIdx) =>
+                          itemIdx === idx ? { ...item, value: nextValue } : item
+                        )
+                      }));
+                      if (errors[errorKey] && String(nextValue).trim()) {
+                        setErrors((prev) => ({ ...prev, [errorKey]: undefined }));
+                      }
+                    }}
+                  >
+                    <option value="">-- Выберите --</option>
+                    {(field.options || []).map((option) => (
+                      <option key={`${field.name}-${option}`} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className={`input ${errors[errorKey] ? 'input-error' : ''}`}
+                    type={field.type === 'number' ? 'number' : field.type === 'color' ? 'color' : 'text'}
+                    value={value}
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      setForm((s) => ({
+                        ...s,
+                        custom_fields: (s.custom_fields || []).map((item, itemIdx) =>
+                          itemIdx === idx ? { ...item, value: nextValue } : item
+                        )
+                      }));
+                      if (errors[errorKey] && String(nextValue).trim()) {
+                        setErrors((prev) => ({ ...prev, [errorKey]: undefined }));
+                      }
+                    }}
+                  />
+                )}
+                <span className={`field-error ${errors[errorKey] ? '' : 'field-error-placeholder'}`}>
+                  {errors[errorKey] || ' '}
                 </span>
               </label>
-              <label>
-                SKU*
-                <input
-                  className={`input ${errors.sku ? 'input-error' : ''}`}
-                  value={form.sku}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setForm((s) => ({ ...s, sku: value }));
-                    if (errors.sku && value.trim()) {
-                      setErrors((prev) => ({ ...prev, sku: undefined }));
-                    }
-                  }}
-                />
-                <span className={`field-error ${errors.sku ? '' : 'field-error-placeholder'}`}>
-                  {errors.sku || ' '}
-                </span>
-              </label>
-              <label>
-                Количество
-                <input
-                  className="input"
-                  type="number"
-                  value={form.quantity}
-                  onChange={(e) => setForm((s) => ({ ...s, quantity: e.target.value }))}
-                />
-              </label>
-              <label>
-                Описание
-                <textarea
-                  className="input"
-                  value={form.description || ''}
-                  onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
-                />
-              </label>
+            );
+          })}
 
-              {fields.map((field, idx) => {
-                const value = form.custom_fields?.[idx]?.value ?? '';
-                const errorKey = `custom_${idx}`;
-                return (
-                  <label key={field.id || field.name}>
-                    {field.name}{field.required ? '*' : ''}
-                    {field.type === 'select' ? (
-                      <select
-                        className={`input ${errors[errorKey] ? 'input-error' : ''}`}
-                        value={value}
-                        onChange={(e) =>
-                          {
-                            const nextValue = e.target.value;
-                            setForm((s) => ({
-                              ...s,
-                              custom_fields: (s.custom_fields || []).map((item, itemIdx) =>
-                                itemIdx === idx ? { ...item, value: nextValue } : item
-                              )
-                            }));
-                            if (errors[errorKey] && String(nextValue).trim()) {
-                              setErrors((prev) => ({ ...prev, [errorKey]: undefined }));
-                            }
-                          }
-                        }
-                      >
-                        <option value="">-- Выберите --</option>
-                        {(field.options || []).map((option) => (
-                          <option key={`${field.name}-${option}`} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <input
-                        className={`input ${errors[errorKey] ? 'input-error' : ''}`}
-                        type={field.type === 'number' ? 'number' : field.type === 'color' ? 'color' : 'text'}
-                        value={value}
-                        onChange={(e) =>
-                          {
-                            const nextValue = e.target.value;
-                            setForm((s) => ({
-                              ...s,
-                              custom_fields: (s.custom_fields || []).map((item, itemIdx) =>
-                                itemIdx === idx ? { ...item, value: nextValue } : item
-                              )
-                            }));
-                            if (errors[errorKey] && String(nextValue).trim()) {
-                              setErrors((prev) => ({ ...prev, [errorKey]: undefined }));
-                            }
-                          }
-                        }
-                      />
-                    )}
-                    <span className={`field-error ${errors[errorKey] ? '' : 'field-error-placeholder'}`}>
-                      {errors[errorKey] || ' '}
-                    </span>
-                  </label>
-                );
-              })}
+          <label className="form-grid-item--full">
+            Описание
+            <textarea
+              className="input"
+              value={form.description || ''}
+              onChange={(e) => setForm((s) => ({ ...s, description: e.target.value }))}
+            />
+          </label>
+        </form>
+      </Modal>
 
-              <div className="modal-actions">
-                <button
-                  className="btn"
-                  type="button"
-                  onClick={() => {
-                    setOpen(false);
-                    setErrors({});
-                  }}
-                >
-                  Отмена
-                </button>
-                <button className="btn btn-primary btn-save" type="submit" disabled={saveMutation.isPending}>Сохранить</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {importOpen && (
-        <div className="modal-backdrop" onClick={closeImportModal}>
-          <div className="modal import-modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Импорт товаров из Excel</h3>
-            <p className="import-subtitle">
-              Шаг {importStep} из 2. Импортируются только новые SKU (с учетом trim), остаток для новых товаров = 0.
-            </p>
+      <Modal
+        open={importOpen}
+        onClose={closeImportModal}
+        title="Импорт товаров из Excel"
+        size="lg"
+        footer={
+          <>
+            {importStep === 2 && (
+              <button className="btn-cancel" type="button" onClick={() => setImportStep(1)}>
+                Назад
+              </button>
+            )}
+            <button className="btn-cancel" type="button" onClick={closeImportModal}>
+              Закрыть
+            </button>
+            {importStep === 2 && (
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={() => importMutation.mutate()}
+                disabled={importMutation.isPending || importRows.length === 0}
+              >
+                {importMutation.isPending ? 'Импорт...' : 'Импортировать'}
+              </button>
+            )}
+          </>
+        }
+      >
+        <p className="import-subtitle">
+          Шаг {importStep} из 2. Импортируются только новые SKU (с учетом trim), остаток для новых товаров = 0.
+        </p>
 
             {importStep === 1 && (
               <div className="import-step">
@@ -1106,58 +1128,42 @@ export default function ProductsPage() {
               </div>
             )}
 
-            <div className="modal-actions">
-              {importStep === 2 && (
-                <button className="btn" type="button" onClick={() => setImportStep(1)}>Назад</button>
-              )}
-              <button className="btn" type="button" onClick={closeImportModal}>Закрыть</button>
-              {importStep === 2 && (
-                <button
-                  className="btn btn-primary btn-save"
-                  type="button"
-                  onClick={() => importMutation.mutate()}
-                  disabled={importMutation.isPending || importRows.length === 0}
-                >
-                  {importMutation.isPending ? 'Импорт...' : 'Импортировать'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {deleteCandidate && (
-        <div className="modal-backdrop" onClick={() => setDeleteCandidate(null)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Удалить товар?</h3>
-            <p>
-              Вы уверены, что хотите удалить товар
-              {' '}
-              <strong>{deleteCandidate.name}</strong>
-              {' '}
-              (
-              <strong>{deleteCandidate.sku}</strong>
-              )?
-            </p>
-            <div className="modal-actions">
-              <button className="btn" type="button" onClick={() => setDeleteCandidate(null)}>
-                Отмена
-              </button>
-              <button
-                className="btn btn-danger"
-                type="button"
-                onClick={() => {
-                  deleteMutation.mutate(deleteCandidate.id);
-                  setDeleteCandidate(null);
-                }}
-                disabled={deleteMutation.isPending}
-              >
-                Удалить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={!!deleteCandidate}
+        onClose={() => setDeleteCandidate(null)}
+        title="Удалить товар?"
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="btn-cancel" onClick={() => setDeleteCandidate(null)}>
+              Отмена
+            </button>
+            <button
+              className="btn btn-danger"
+              type="button"
+              onClick={() => {
+                deleteMutation.mutate(deleteCandidate.id);
+                setDeleteCandidate(null);
+              }}
+              disabled={deleteMutation.isPending}
+            >
+              Удалить
+            </button>
+          </>
+        }
+      >
+        <p>
+          Вы уверены, что хотите удалить товар
+          {' '}
+          <strong>{deleteCandidate?.name}</strong>
+          {' '}
+          (
+          <strong>{deleteCandidate?.sku}</strong>
+          )?
+        </p>
+      </Modal>
     </section>
   );
 }

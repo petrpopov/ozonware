@@ -5,6 +5,8 @@ import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
 import { useUiStore } from '../store/useUiStore.js';
 import OperationBuilder from '../components/OperationBuilder.jsx';
 import OperationsHistory from '../components/OperationsHistory.jsx';
+import Modal from '../components/Modal.jsx';
+import ShipmentEditModal from '../components/ShipmentEditModal.jsx';
 
 function parseCsvDateToDay(value) {
   const raw = String(value ?? '').trim();
@@ -722,48 +724,6 @@ export default function ShipmentPage() {
     };
   };
 
-  useEffect(() => {
-    if (!addOpen) {
-      return undefined;
-    }
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setAddOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [addOpen]);
-
-  useEffect(() => {
-    if (!editOpen) {
-      return undefined;
-    }
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setEditOpen(false);
-        setEditForm(null);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editOpen]);
-
-  useEffect(() => {
-    if (!shipmentSyncOpen) {
-      return undefined;
-    }
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeShipmentSyncModal();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [shipmentSyncOpen]);
 
   useEffect(() => () => {
     if (fbsSourceRef.current) {
@@ -876,70 +836,113 @@ export default function ShipmentPage() {
         }}
       />
 
-      {addOpen && (
-        <div className="modal-backdrop" onClick={() => setAddOpen(false)}>
-          <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Новая отгрузка</h3>
-            <OperationBuilder
-              type="shipment"
-              products={productsQuery.data || []}
-              onSubmit={submit}
-              loading={createMutation.isPending}
-              stockLimited
-              allowNegativeWithCorrection
-            />
-            <div className="modal-actions">
-              <button className="btn" type="button" onClick={() => setAddOpen(false)}>
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Новая отгрузка"
+        size="lg"
+        footer={
+          <button className="btn-cancel" type="button" onClick={() => setAddOpen(false)}>
+            Закрыть
+          </button>
+        }
+      >
+        <OperationBuilder
+          type="shipment"
+          products={productsQuery.data || []}
+          onSubmit={submit}
+          loading={createMutation.isPending}
+          stockLimited
+          allowNegativeWithCorrection
+        />
+      </Modal>
 
-      {editOpen && (
-        <div
-          className="modal-backdrop"
-          onClick={() => {
-            setEditOpen(false);
-            setEditForm(null);
-          }}
-        >
-          <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Редактировать отгрузку #{editForm?.id || ''}</h3>
-            {editLoading && <p>Загрузка...</p>}
-            {!editLoading && editForm && (
-              <OperationBuilder
-                type="shipment"
-                products={productsQuery.data || []}
-                initialData={editForm}
-                submitLabel="Сохранить"
-                onSubmit={submitEdit}
-                loading={updateMutation.isPending}
-                stockLimited
-                allowNegativeWithCorrection
-              />
+      <ShipmentEditModal
+        open={editOpen}
+        onClose={() => { setEditOpen(false); setEditForm(null); }}
+        form={editLoading ? null : editForm}
+        products={productsQuery.data || []}
+        loading={updateMutation.isPending}
+        onSubmit={submitEdit}
+      />
+
+      <Modal
+        open={shipmentSyncOpen}
+        onClose={closeShipmentSyncModal}
+        title="Синхронизация Ozon"
+        size="xl"
+        footer={
+          <>
+            {shipmentSyncTab === 'fbs' && (
+              <>
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={() => {
+                    if (fbsSyncRunning) {
+                      cancelFbsSyncMutation.mutate();
+                      return;
+                    }
+                    startFbsSync();
+                  }}
+                  disabled={cancelFbsSyncMutation.isPending}
+                >
+                  {fbsSyncRunning ? 'Отмена' : 'Синхронизация FBS'}
+                </button>
+                {fbsSyncCompleted && (
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => applyFbsMutation.mutate(null)}
+                    disabled={applyFbsMutation.isPending || sortedFbsDays.length === 0}
+                  >
+                    {applyFbsMutation.isPending ? 'Применение...' : 'Применить FBS'}
+                  </button>
+                )}
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={() => applyFbsCsvMutation.mutate(fbsCsvDays)}
+                  disabled={applyFbsCsvMutation.isPending || fbsCsvDays.length === 0}
+                >
+                  {applyFbsCsvMutation.isPending ? 'Проведение...' : 'Провести FBS из CSV'}
+                </button>
+              </>
             )}
-            <div className="modal-actions">
-              <button
-                className="btn"
-                type="button"
-                onClick={() => {
-                  setEditOpen(false);
-                  setEditForm(null);
-                }}
-              >
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {shipmentSyncOpen && (
-        <div className="modal-backdrop" onClick={closeShipmentSyncModal}>
-          <div className="modal import-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Синхронизация Ozon</h3>
+            {shipmentSyncTab === 'fbo' && (
+              <>
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={() => {
+                    if (fboSyncRunning) {
+                      cancelFboSyncMutation.mutate();
+                      return;
+                    }
+                    startFboSync();
+                  }}
+                  disabled={cancelFboSyncMutation.isPending}
+                >
+                  {fboSyncRunning ? 'Отмена' : 'Синхронизация FBO'}
+                </button>
+                {fboSyncCompleted && (
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => applyFboMutation.mutate(null)}
+                    disabled={applyFboMutation.isPending || sortedFboDays.length === 0}
+                  >
+                    {applyFboMutation.isPending ? 'Применение...' : 'Применить FBO'}
+                  </button>
+                )}
+              </>
+            )}
+            <button className="btn-cancel" type="button" onClick={closeShipmentSyncModal}>
+              Закрыть
+            </button>
+          </>
+        }
+      >
             <div className="shipment-sync-tabs">
               <button
                 className={`shipment-sync-tab ${shipmentSyncTab === 'fbs' ? 'active' : ''}`}
@@ -1181,44 +1184,7 @@ export default function ShipmentPage() {
               </div>
             )}
 
-            <div className="modal-actions">
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={() => {
-                  if (fbsSyncRunning) {
-                    cancelFbsSyncMutation.mutate();
-                    return;
-                  }
-                  startFbsSync();
-                }}
-                disabled={cancelFbsSyncMutation.isPending}
-              >
-                {fbsSyncRunning ? 'Отмена' : 'Синхронизация FBS'}
-              </button>
-              {fbsSyncCompleted && (
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  onClick={() => applyFbsMutation.mutate(null)}
-                  disabled={applyFbsMutation.isPending || sortedFbsDays.length === 0}
-                >
-                  {applyFbsMutation.isPending ? 'Применение...' : 'Применить FBS'}
-                </button>
-              )}
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={() => applyFbsCsvMutation.mutate(fbsCsvDays)}
-                disabled={applyFbsCsvMutation.isPending || fbsCsvDays.length === 0}
-              >
-                {applyFbsCsvMutation.isPending ? 'Проведение...' : 'Провести FBS из CSV'}
-              </button>
-              <button className="btn" type="button" onClick={closeShipmentSyncModal}>
-                Закрыть
-              </button>
-            </div>
-              </div>
+          </div>
             )}
 
             {shipmentSyncTab === 'fbo' && (
@@ -1314,40 +1280,9 @@ export default function ShipmentPage() {
               </div>
             )}
 
-                <div className="modal-actions">
-                  <button
-                    className="btn btn-primary"
-                    type="button"
-                    onClick={() => {
-                      if (fboSyncRunning) {
-                        cancelFboSyncMutation.mutate();
-                        return;
-                      }
-                      startFboSync();
-                    }}
-                    disabled={cancelFboSyncMutation.isPending}
-                  >
-                    {fboSyncRunning ? 'Отмена' : 'Синхронизация FBO'}
-                  </button>
-                  {fboSyncCompleted && (
-                    <button
-                      className="btn btn-primary"
-                      type="button"
-                      onClick={() => applyFboMutation.mutate(null)}
-                      disabled={applyFboMutation.isPending || sortedFboDays.length === 0}
-                    >
-                      {applyFboMutation.isPending ? 'Применение...' : 'Применить FBO'}
-                    </button>
-                  )}
-                  <button className="btn" type="button" onClick={closeShipmentSyncModal}>
-                    Закрыть
-                  </button>
-                </div>
               </div>
             )}
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

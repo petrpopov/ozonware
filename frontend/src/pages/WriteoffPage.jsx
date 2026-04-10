@@ -5,6 +5,7 @@ import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
 import { useUiStore } from '../store/useUiStore.js';
 import OperationBuilder from '../components/OperationBuilder.jsx';
 import OperationsHistory from '../components/OperationsHistory.jsx';
+import Modal from '../components/Modal.jsx';
 
 export default function WriteoffPage() {
   const queryClient = useQueryClient();
@@ -130,31 +131,6 @@ export default function WriteoffPage() {
     onError: (error) => pushToast(error.message, 'error')
   });
 
-  useEffect(() => {
-    if (!addOpen) {
-      return undefined;
-    }
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setAddOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [addOpen]);
-
-  useEffect(() => {
-    if (!correctionOpen) {
-      return undefined;
-    }
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setCorrectionOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [correctionOpen]);
 
   const openCreateCorrection = () => {
     setCorrectionMode('create');
@@ -383,39 +359,68 @@ export default function WriteoffPage() {
         }
       />
 
-      {addOpen && (
-        <div className="modal-backdrop" onClick={() => setAddOpen(false)}>
-          <div className="modal import-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Новое списание</h3>
-            <OperationBuilder
-              type="writeoff"
-              products={productsQuery.data || []}
-              onSubmit={(payload) => createMutation.mutate(payload)}
-              loading={createMutation.isPending}
-              showReason
-              stockLimited
-            />
-            <div className="modal-actions">
-              <button className="btn" type="button" onClick={() => setAddOpen(false)}>
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Новое списание"
+        size="lg"
+        footer={
+          <button className="btn-cancel" type="button" onClick={() => setAddOpen(false)}>
+            Закрыть
+          </button>
+        }
+      >
+        <OperationBuilder
+          type="writeoff"
+          products={productsQuery.data || []}
+          onSubmit={(payload) => createMutation.mutate(payload)}
+          loading={createMutation.isPending}
+          showReason
+          stockLimited
+        />
+      </Modal>
 
-      {correctionOpen && (
-        <div
-          className="modal-backdrop"
-          onClick={() => {
-            setCorrectionOpen(false);
-            setCorrectionMode('create');
-            setEditingCorrectionId(null);
-          }}
-        >
-          <div className="modal import-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>{correctionMode === 'edit' ? `Редактировать корректировку #${editingCorrectionId}` : 'Ручная корректировка'}</h3>
-            <form className="card operation-builder" onSubmit={submitManualCorrection}>
+      <Modal
+        open={correctionOpen}
+        onClose={() => {
+          setCorrectionOpen(false);
+          setCorrectionMode('create');
+          setEditingCorrectionId(null);
+        }}
+        title={correctionMode === 'edit' ? `Редактировать корректировку #${editingCorrectionId}` : 'Ручная корректировка'}
+        size="lg"
+        footer={
+          <>
+            {correctionError && (
+              <span className="import-error" style={{ marginRight: 'auto' }}>{correctionError}</span>
+            )}
+            <button
+              type="button"
+              className="btn-cancel"
+              onClick={() => {
+                setCorrectionOpen(false);
+                setCorrectionMode('create');
+                setEditingCorrectionId(null);
+              }}
+            >
+              Закрыть
+            </button>
+            <button
+              type="submit"
+              form="correction-form"
+              className="btn btn-primary"
+              disabled={(createCorrectionMutation.isPending || updateCorrectionMutation.isPending) || correctionItems.length === 0}
+            >
+              {createCorrectionMutation.isPending || updateCorrectionMutation.isPending
+                ? 'Сохранение...'
+                : correctionMode === 'edit'
+                  ? 'Сохранить корректировку'
+                  : 'Провести корректировку'}
+            </button>
+          </>
+        }
+      >
+        <form id="correction-form" className="card operation-builder" onSubmit={submitManualCorrection}>
               <div className="form-row">
                 <label>
                   Дата
@@ -542,37 +547,8 @@ export default function WriteoffPage() {
                 </table>
               </div>
 
-              <div className="modal-actions">
-                {correctionError && <div className="import-error">{correctionError}</div>}
-                <button
-                  className="btn btn-primary"
-                  type="submit"
-                  disabled={(createCorrectionMutation.isPending || updateCorrectionMutation.isPending) || correctionItems.length === 0}
-                >
-                  {createCorrectionMutation.isPending || updateCorrectionMutation.isPending
-                    ? 'Сохранение...'
-                    : correctionMode === 'edit'
-                      ? 'Сохранить корректировку'
-                      : 'Провести корректировку'}
-                </button>
-              </div>
-            </form>
-            <div className="modal-actions">
-              <button
-                className="btn"
-                type="button"
-                onClick={() => {
-                  setCorrectionOpen(false);
-                  setCorrectionMode('create');
-                  setEditingCorrectionId(null);
-                }}
-              >
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </div>
   );
 }

@@ -33,40 +33,36 @@ export default function AppLayout() {
   };
 
   return (
-    <div className="page">
-      <header className="header">
-        <div className="header-top">
-          <div className="header-brand">
-            <h1>Складской учет</h1>
-          </div>
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={toggleTheme}
-            aria-label="Переключить тему"
-            title="Переключить тему"
-          >
-            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-            <span>{theme === 'dark' ? 'Светлая' : 'Темная'} тема</span>
-          </button>
-        </div>
+    <>
+      <header className="app-header">
+        <div className="app-header-brand">Складской учёт</div>
+        <nav className="app-nav" aria-label="Разделы">
+          {tabs.map(([slug, label]) => (
+            <NavLink
+              key={slug}
+              to={`/${slug}`}
+              className={({ isActive }) => (isActive ? 'app-nav-item active' : 'app-nav-item')}
+            >
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+        <button
+          type="button"
+          className="app-theme-btn"
+          onClick={toggleTheme}
+          aria-label="Переключить тему"
+          title="Переключить тему"
+        >
+          {theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}
+        </button>
       </header>
 
-      <nav className="tabs" aria-label="Разделы">
-        {tabs.map(([slug, label]) => (
-          <NavLink
-            key={slug}
-            to={`/${slug}`}
-            className={({ isActive }) => (isActive ? 'tab active' : 'tab')}
-          >
-            {label}
-          </NavLink>
-        ))}
-      </nav>
-
-      <main className="content">
-        <Outlet />
-      </main>
-    </div>
+      <div className="page">
+        <main className="content">
+          <Outlet />
+        </main>
+      </div>
+    </>
   );
 }

@@ -4,6 +4,7 @@ import { services } from '../api/services.js';
 import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
 import { useUiStore } from '../store/useUiStore.js';
 import { TrashIcon } from '../components/Icons.jsx';
+import Modal from '../components/Modal.jsx';
 
 function normalize(value) {
   return String(value ?? '').trim().toLowerCase();
@@ -329,27 +330,6 @@ export default function InventoryPage() {
     setReviewError('');
   };
 
-  useEffect(() => {
-    if (!inventoryOpen) return undefined;
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setInventoryOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [inventoryOpen]);
-
-  useEffect(() => {
-    if (selectedHistoryId === null) return undefined;
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setSelectedHistoryId(null);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedHistoryId]);
 
   if (productsQuery.isLoading || historyQuery.isLoading) return <p>Загрузка...</p>;
 
@@ -397,13 +377,20 @@ export default function InventoryPage() {
         </div>
       </section>
 
-      {selectedHistoryId !== null && (
-        <div className="modal-backdrop" onClick={() => setSelectedHistoryId(null)}>
-          <div className="modal import-modal" onClick={(event) => event.stopPropagation()}>
-            {historyDetailsQuery.isLoading && <p>Загрузка...</p>}
-            {!historyDetailsQuery.isLoading && (
-              <>
-                <h3>Инвентаризация #{historyDetailsQuery.data?.id || selectedHistoryId}</h3>
+      <Modal
+        open={selectedHistoryId !== null}
+        onClose={() => setSelectedHistoryId(null)}
+        title={`Инвентаризация #${historyDetailsQuery.data?.id || selectedHistoryId || ''}`}
+        size="md"
+        footer={
+          <button className="btn-cancel" type="button" onClick={() => setSelectedHistoryId(null)}>
+            Закрыть
+          </button>
+        }
+      >
+        {historyDetailsQuery.isLoading && <p>Загрузка...</p>}
+        {!historyDetailsQuery.isLoading && (
+          <>
                 <div className="import-result">
                   Дата: <strong>{(historyDetailsQuery.data?.operation_date || '').slice(0, 10) || '—'}</strong> ·
                   Расхождений: <strong>{historyDetailsQuery.data?.differences?.length || 0}</strong>
@@ -468,21 +455,48 @@ export default function InventoryPage() {
                     </tbody>
                   </table>
                 </div>
-                <div className="modal-actions">
-                  <button className="btn" type="button" onClick={() => setSelectedHistoryId(null)}>
-                    Закрыть
-                  </button>
-                </div>
+          </>
+        )}
+      </Modal>
+
+      <Modal
+        open={inventoryOpen}
+        onClose={() => setInventoryOpen(false)}
+        title="Инвентаризация по коробам"
+        size="xl"
+        footer={
+          <>
+            <button className="btn-cancel" type="button" onClick={() => setInventoryOpen(false)}>
+              Закрыть
+            </button>
+            {inventoryStep === 1 && (
+              <button
+                className="btn btn-primary"
+                type="button"
+                onClick={openReviewStep}
+                disabled={reviewLoading || inventoryStats.positions === 0}
+              >
+                {reviewLoading ? 'Загрузка...' : 'Далее: проверка'}
+              </button>
+            )}
+            {inventoryStep === 2 && (
+              <>
+                <button className="btn" type="button" onClick={() => setInventoryStep(1)}>
+                  Назад к сканированию
+                </button>
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={applyInventory}
+                  disabled={createMutation.isPending || reviewRows.length === 0}
+                >
+                  {createMutation.isPending ? 'Проведение...' : 'Провести инвентаризацию'}
+                </button>
               </>
             )}
-          </div>
-        </div>
-      )}
-
-      {inventoryOpen && (
-        <div className="modal-backdrop" onClick={() => setInventoryOpen(false)}>
-          <div className="modal import-modal inventory-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Инвентаризация по коробам</h3>
+          </>
+        }
+      >
             <div className="inventory-stepper">
               <div className={`inventory-step ${inventoryStep === 1 ? 'active' : 'done'}`}>
                 <span className="inventory-step-num">1</span>
@@ -742,39 +756,7 @@ export default function InventoryPage() {
               </div>
             )}
 
-            <div className="modal-actions">
-              <button className="btn" type="button" onClick={() => setInventoryOpen(false)}>
-                Закрыть
-              </button>
-              {inventoryStep === 1 && (
-                <button
-                  className="btn btn-primary"
-                  type="button"
-                  onClick={openReviewStep}
-                  disabled={reviewLoading || inventoryStats.positions === 0}
-                >
-                  {reviewLoading ? 'Загрузка...' : 'Далее: проверка'}
-                </button>
-              )}
-              {inventoryStep === 2 && (
-                <>
-                  <button className="btn" type="button" onClick={() => setInventoryStep(1)}>
-                    Назад к сканированию
-                  </button>
-                  <button
-                    className="btn btn-primary"
-                    type="button"
-                    onClick={applyInventory}
-                    disabled={createMutation.isPending || reviewRows.length === 0}
-                  >
-                    {createMutation.isPending ? 'Проведение...' : 'Провести инвентаризацию'}
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

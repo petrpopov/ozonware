@@ -306,25 +306,71 @@ export default function ProductCardPage() {
         </form>
       </section>
 
-      <section className="stats-grid">
-        <div className="stat-card"><h4>Текущий остаток</h4><p>{Number(extStats.product?.quantity ?? form.quantity ?? 0)}</p></div>
-        <div className="stat-card"><h4>Приходов (шт)</h4><p>{warehouse.receipts_qty || 0}</p></div>
-        <div className="stat-card"><h4>Отгрузок (шт)</h4><p>{warehouse.shipments_qty || 0}</p></div>
-        <div className="stat-card"><h4>Списаний (шт)</h4><p>{warehouse.writeoffs_qty || 0}</p></div>
-        <div className="stat-card"><h4>Корректировки (нетто)</h4><p>{warehouse.corrections_qty || 0}</p></div>
-        <div className="stat-card"><h4>Инвент. разница</h4><p>{warehouse.inventory_diff_qty || 0}</p></div>
-      </section>
+      <div className="stack">
+        <h3>Остатки и движения</h3>
+        <section className="product-stats-strip">
+          <div className="product-stats-item">
+            <span className="product-stats-label">Текущий остаток</span>
+            <span className="product-stats-value mono">{Number(extStats.product?.quantity ?? form.quantity ?? 0)}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Приходов (шт)</span>
+            <span className="product-stats-value mono">{warehouse.receipts_qty || 0}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Отгрузок (шт)</span>
+            <span className="product-stats-value mono">{warehouse.shipments_qty || 0}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Списаний (шт)</span>
+            <span className="product-stats-value mono">{warehouse.writeoffs_qty || 0}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Корректировки</span>
+            <span className="product-stats-value mono">{warehouse.corrections_qty || 0}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Инвент. разница</span>
+            <span className="product-stats-value mono">{warehouse.inventory_diff_qty || 0}</span>
+          </div>
+        </section>
 
-      <section className="stats-grid">
-        <div className="stat-card"><h4>Заказов Ozon</h4><p>{orders.postings || 0}</p></div>
-        <div className="stat-card"><h4>Строк заказов</h4><p>{orders.lines || 0}</p></div>
-        <div className="stat-card"><h4>Ед. заказано</h4><p>{orders.units_total || 0}</p></div>
-        <div className="stat-card"><h4>Ед. передано</h4><p>{orders.units_transferred || 0}</p></div>
-        <div className="stat-card"><h4>Ед. доставлено</h4><p>{orders.units_delivered || 0}</p></div>
-        <div className="stat-card"><h4>Ед. отменено</h4><p>{orders.units_canceled || 0}</p></div>
-        <div className="stat-card"><h4>Выручка gross</h4><p>{Number(orders.revenue_gross || 0).toFixed(2)}</p></div>
-        <div className="stat-card"><h4>Оплачено</h4><p>{Number(orders.revenue_paid || 0).toFixed(2)}</p></div>
-      </section>
+        <h3>Заказы Ozon</h3>
+        <section className="product-stats-strip">
+          <div className="product-stats-item">
+            <span className="product-stats-label">Заказов</span>
+            <span className="product-stats-value mono">{orders.postings || 0}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Строк</span>
+            <span className="product-stats-value mono">{orders.lines || 0}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Заказано</span>
+            <span className="product-stats-value mono">{orders.units_total || 0}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Передано</span>
+            <span className="product-stats-value mono">{orders.units_transferred || 0}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Доставлено</span>
+            <span className="product-stats-value mono">{orders.units_delivered || 0}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Отменено</span>
+            <span className="product-stats-value mono">{orders.units_canceled || 0}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Выручка gross</span>
+            <span className="product-stats-value mono">{Number(orders.revenue_gross || 0).toFixed(2)}</span>
+          </div>
+          <div className="product-stats-item">
+            <span className="product-stats-label">Оплачено</span>
+            <span className="product-stats-value mono">{Number(orders.revenue_paid || 0).toFixed(2)}</span>
+          </div>
+        </section>
+      </div>
 
       <section className="card">
         <h3>Лента движений и заказов</h3>

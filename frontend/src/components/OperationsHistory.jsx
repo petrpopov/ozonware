@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import Modal from './Modal.jsx';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { services } from '../api/services.js';
@@ -16,7 +17,9 @@ export default function OperationsHistory({
   sort = { key: 'id', dir: 'desc' },
   onSort,
   showOperationType = false,
-  resolveOperationTypeLabel
+  resolveOperationTypeLabel,
+  emptyMessage = 'Операций нет',
+  emptySubtext = 'Здесь появятся записи после проведения первой операции'
 }) {
   const navigate = useNavigate();
   const [selectedOperationId, setSelectedOperationId] = useState(null);
@@ -31,18 +34,6 @@ export default function OperationsHistory({
     enabled: selectedOperationId !== null
   });
 
-  useEffect(() => {
-    if (selectedOperationId === null) {
-      return undefined;
-    }
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setSelectedOperationId(null);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [selectedOperationId]);
 
   useEffect(() => {
     if (!enableBulkDelete) return;
@@ -203,8 +194,31 @@ export default function OperationsHistory({
             </tr>
           </thead>
           <tbody>
+            {operations.length === 0 && (
+              <tr>
+                <td colSpan={showOperationType ? (enableBulkDelete ? 8 : 7) : (enableBulkDelete ? 7 : 6)} style={{ padding: 0, border: 'none' }}>
+                  <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+                    <p style={{ margin: '0 0 6px', fontWeight: 500, color: 'var(--text)' }}>{emptyMessage}</p>
+                    <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>{emptySubtext}</p>
+                  </div>
+                </td>
+              </tr>
+            )}
             {operations.map((op) => (
-              <tr key={op.id} className="row-clickable" onClick={() => setSelectedOperationId(op.id)}>
+              <tr
+                key={op.id}
+                className="row-clickable"
+                onClick={() => setSelectedOperationId(op.id)}
+                tabIndex={0}
+                role="button"
+                aria-label={`Открыть операцию ${op.id}`}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setSelectedOperationId(op.id);
+                  }
+                }}
+              >
                 {enableBulkDelete && (
                   <td
                     onClick={(event) => {
@@ -261,13 +275,20 @@ export default function OperationsHistory({
         </table>
       </div>
 
-      {selectedOperationId !== null && (
-        <div className="modal-backdrop" onClick={() => setSelectedOperationId(null)}>
-          <div className="modal" onClick={(event) => event.stopPropagation()}>
-            {detailsQuery.isLoading && <p>Загрузка...</p>}
-            {!detailsQuery.isLoading && selectedOperation && (
-              <div className="stack-sm">
-                <h3>Операция #{selectedOperation.id}</h3>
+      <Modal
+        open={selectedOperationId !== null}
+        onClose={() => setSelectedOperationId(null)}
+        title={`Операция #${selectedOperationId ?? ''}`}
+        size="md"
+        footer={
+          <button className="btn-cancel" type="button" onClick={() => setSelectedOperationId(null)}>
+            Закрыть
+          </button>
+        }
+      >
+        {detailsQuery.isLoading && <p>Загрузка...</p>}
+        {!detailsQuery.isLoading && selectedOperation && (
+          <div className="stack-sm">
                 <div className="import-result">
                   Дата: <strong>{(selectedOperation.operation_date || '').slice(0, 10) || '—'}</strong> · Тип:{' '}
                   <strong>{selectedOperation.type || '—'}</strong> · Позиций: <strong>{detailItems.length}</strong> ·
@@ -332,16 +353,9 @@ export default function OperationsHistory({
                   </table>
                 </div>
 
-                <div className="modal-actions">
-                  <button className="btn" type="button" onClick={() => setSelectedOperationId(null)}>
-                    Закрыть
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
     </section>
   );
 }

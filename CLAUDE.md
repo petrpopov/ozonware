@@ -36,6 +36,28 @@ For detailed information, read the relevant `.memory_bank/` file:
 - **Frontend** → read `architecture.md` for component structure
 - **Setup/config** → read `development.md` for commands and env vars
 
+## Design Context
+
+### Users
+Владелец небольшого магазина на OZON + команда 2–5 человек (менеджер склада, операторы). Работают за десктопом в офисе или дома, инструмент открыт весь рабочий день. Задачи: приёмка, отгрузка, списание, инвентаризация, синхронизация с OZON FBS/FBO и Google Sheets.
+
+### Brand Personality
+Три слова: **точный, спокойный, профессиональный**. Рабочий инструмент, а не витрина.
+
+### Aesthetic Direction
+- Vercel / Geist — ахроматика, shadow-as-border, минимализм
+- **Тёмная тема — основная** (оптимизирована под длительную работу)
+- Geist + Geist Mono (числа, артикулы, коды)
+- Статусные цвета (зелёный/красный/янтарный) — только через CSS-переменные
+- Запрещено: glassmorphism, gradient text, hero metrics, card grids, border-left accent stripes
+
+### Design Principles
+1. Информация важнее украшений — декоративные элементы без функции удаляются
+2. Тёмная тема первична — все состояния проектируются под `[data-theme='dark']`
+3. Числа читаются с первого взгляда — Geist Mono для всех количеств, цен, ID
+4. Спокойные состояния, чёткие сигналы — акцент только на ошибках и деструктивных действиях
+5. Статусные цвета в токены — хардкод hex/rgba недопустим
+
 ## Conventions
 
 - User-facing text in **Russian**. Code/identifiers in **English**.

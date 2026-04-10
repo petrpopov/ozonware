@@ -5,6 +5,7 @@ import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
 import { useUiStore } from '../store/useUiStore.js';
 import OperationBuilder from '../components/OperationBuilder.jsx';
 import OperationsHistory from '../components/OperationsHistory.jsx';
+import Modal from '../components/Modal.jsx';
 
 function normalizeText(value) {
   return String(value ?? '').trim().toLowerCase();
@@ -438,47 +439,6 @@ export default function ReceiptPage() {
     });
   };
 
-  useEffect(() => {
-    if (!importOpen) {
-      return undefined;
-    }
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        closeImportModal();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [importOpen]);
-
-  useEffect(() => {
-    if (!addOpen) {
-      return undefined;
-    }
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setAddOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [addOpen]);
-
-  useEffect(() => {
-    if (!editOpen) {
-      return undefined;
-    }
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setEditOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [editOpen]);
 
   if (productsQuery.isLoading || operationsQuery.isLoading) return <p>Загрузка...</p>;
 
@@ -546,32 +506,51 @@ export default function ReceiptPage() {
         onSort={(key) =>
           setHistorySort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
         }
+        emptyMessage="Нет операций приёмки"
+        emptySubtext="Создайте первую операцию, чтобы начать учёт поступлений"
       />
 
-      {addOpen && (
-        <div className="modal-backdrop" onClick={() => setAddOpen(false)}>
-          <div className="modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Новый приход</h3>
-            <OperationBuilder
-              type="receipt"
-              products={productsQuery.data || []}
-              onSubmit={(payload) => createMutation.mutate(payload)}
-              loading={createMutation.isPending}
-            />
-            <div className="modal-actions">
-              <button className="btn" type="button" onClick={() => setAddOpen(false)}>
-                Закрыть
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Modal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        title="Новый приход"
+        size="lg"
+        footer={
+          <button className="btn-cancel" type="button" onClick={() => setAddOpen(false)}>
+            Закрыть
+          </button>
+        }
+      >
+        <OperationBuilder
+          type="receipt"
+          products={productsQuery.data || []}
+          onSubmit={(payload) => createMutation.mutate(payload)}
+          loading={createMutation.isPending}
+        />
+      </Modal>
 
-      {importOpen && (
-        <div className="modal-backdrop" onClick={closeImportModal}>
-          <div className="modal import-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Импорт прихода из Excel</h3>
-            <p className="import-subtitle">
+      <Modal
+        open={importOpen}
+        onClose={closeImportModal}
+        title="Импорт прихода из Excel"
+        size="lg"
+        footer={
+          <>
+            <button className="btn-cancel" type="button" onClick={closeImportModal}>
+              Закрыть
+            </button>
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={submitImportedReceipt}
+              disabled={importMutation.isPending || importPreview.foundEntries.length === 0}
+            >
+              {importMutation.isPending ? 'Проведение...' : 'Провести'}
+            </button>
+          </>
+        }
+      >
+        <p className="import-subtitle">
               SKU берется из колонки <strong>SKU</strong>. Не найденные в БД товары не добавляются.
             </p>
 
@@ -673,27 +652,30 @@ export default function ReceiptPage() {
               </div>
             )}
 
-            <div className="modal-actions">
-              <button className="btn" type="button" onClick={closeImportModal}>
-                Закрыть
-              </button>
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={submitImportedReceipt}
-                disabled={importMutation.isPending || importPreview.foundEntries.length === 0}
-              >
-                {importMutation.isPending ? 'Проведение...' : 'Провести'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
 
-      {editOpen && (
-        <div className="modal-backdrop" onClick={() => setEditOpen(false)}>
-          <div className="modal import-modal" onClick={(event) => event.stopPropagation()}>
-            <h3>Редактирование прихода #{editForm.id}</h3>
+      <Modal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title={`Редактирование прихода #${editForm?.id || ''}`}
+        size="lg"
+        footer={
+          <>
+            <button className="btn-cancel" type="button" onClick={() => setEditOpen(false)}>
+              Закрыть
+            </button>
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={saveEditOperation}
+              disabled={updateMutation.isPending || (editForm?.items?.length === 0)}
+            >
+              {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+            </button>
+          </>
+        }
+      >
+
             <div className="form-row two-cols">
               <label>
                 Дата
@@ -757,22 +739,7 @@ export default function ReceiptPage() {
               </table>
             </div>
 
-            <div className="modal-actions">
-              <button className="btn" type="button" onClick={() => setEditOpen(false)}>
-                Закрыть
-              </button>
-              <button
-                className="btn btn-primary"
-                type="button"
-                onClick={saveEditOperation}
-                disabled={updateMutation.isPending || editForm.items.length === 0}
-              >
-                {updateMutation.isPending ? 'Сохранение...' : 'Сохранить'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
     </div>
   );
 }

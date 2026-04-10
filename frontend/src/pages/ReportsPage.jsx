@@ -198,11 +198,23 @@ export default function ReportsPage() {
         </div>
       </section>
 
-      <section className="stats-grid">
-        <div className="stat-card"><h4>Товаров</h4><p>{stats.totalProducts || 0}</p></div>
-        <div className="stat-card"><h4>Единиц</h4><p>{stats.totalQuantity || 0}</p></div>
-        <div className="stat-card"><h4>Приходов</h4><p>{stats.totalReceipts || 0}</p></div>
-        <div className="stat-card"><h4>Отгрузок</h4><p>{stats.totalShipments || 0}</p></div>
+      <section className="product-stats-strip">
+        <div className="product-stats-item">
+          <span className="product-stats-label">Товаров</span>
+          <span className="product-stats-value mono">{stats.totalProducts || 0}</span>
+        </div>
+        <div className="product-stats-item">
+          <span className="product-stats-label">Единиц</span>
+          <span className="product-stats-value mono">{stats.totalQuantity || 0}</span>
+        </div>
+        <div className="product-stats-item">
+          <span className="product-stats-label">Приходов</span>
+          <span className="product-stats-value mono">{stats.totalReceipts || 0}</span>
+        </div>
+        <div className="product-stats-item">
+          <span className="product-stats-label">Отгрузок</span>
+          <span className="product-stats-value mono">{stats.totalShipments || 0}</span>
+        </div>
       </section>
 
       <section className="card">
