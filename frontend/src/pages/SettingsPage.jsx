@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
+import Modal from '../components/Modal.jsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { services } from '../api/services.js';
 import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
 import { useUiStore } from '../store/useUiStore.js';
-import { TrashIcon } from '../components/Icons.jsx';
 
 const defaultField = { name: '', type: 'text', required: false, showInTable: true, options: [] };
+
+const TABS = [
+  { id: 'fields', label: 'Поля товаров' },
+  { id: 'gsheets', label: 'Google Sheets' },
+  { id: 'ozon', label: 'OZON' },
+  { id: 'danger', label: 'Дополнительно' }
+];
 
 function normalizeField(field) {
   return {
@@ -19,6 +26,7 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const pushToast = useUiStore((s) => s.pushToast);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('fields');
 
   const fieldsQuery = useQuery({ queryKey: ['product-fields'], queryFn: services.getProductFields });
   const googleQuery = useQuery({ queryKey: ['google-config'], queryFn: services.getGoogleConfig });
@@ -81,7 +89,7 @@ export default function SettingsPage() {
           type: field.type,
           required: field.required,
           show_in_table: field.showInTable !== false,
-          options: field.options || [],
+          options: (field.options || []).filter((opt) => String(opt).trim() !== ''),
           position: i
         });
       }
@@ -149,51 +157,87 @@ export default function SettingsPage() {
     onError: (error) => pushToast(error.message, 'error')
   });
 
-  useEffect(() => {
-    if (!confirmResetOpen) return undefined;
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setConfirmResetOpen(false);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [confirmResetOpen]);
+
+  const updateField = (index, patch) => {
+    setFields((prev) => prev.map((item, idx) => (idx === index ? { ...item, ...patch } : item)));
+  };
+
+  const updateFieldOption = (fieldIndex, optionIndex, value) => {
+    setFields((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== fieldIndex) return item;
+        const nextOptions = [...(item.options || [])];
+        nextOptions[optionIndex] = value;
+        return { ...item, options: nextOptions };
+      })
+    );
+  };
+
+  const removeFieldOption = (fieldIndex, optionIndex) => {
+    setFields((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== fieldIndex) return item;
+        return { ...item, options: (item.options || []).filter((_, i) => i !== optionIndex) };
+      })
+    );
+  };
+
+  const addFieldOption = (fieldIndex) => {
+    setFields((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== fieldIndex) return item;
+        return { ...item, options: [...(item.options || []), ''] };
+      })
+    );
+  };
 
   if (fieldsQuery.isLoading || googleQuery.isLoading || ozonQuery.isLoading) return <p>Загрузка...</p>;
 
   return (
-    <div className="stack">
-      <section className="card">
-        <h3>Поля товаров</h3>
-        <div className="stack-sm">
+    <div className="settings-page">
+      <div className="settings-tabs" role="tablist">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab.id}
+            className={activeTab === tab.id ? 'settings-tab active' : 'settings-tab'}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'fields' && (
+        <div className="settings-section">
+          <div className="settings-fields-head">
+            <span>Название поля</span>
+            <span>Тип</span>
+            <span>Обязательное</span>
+            <span>В таблице</span>
+            <span aria-hidden="true" />
+          </div>
           {fields.map((field, index) => (
-            <div className="field-card" key={`${field.id || 'new'}-${index}`}>
-              <div className="form-row">
+            <div key={`${field.id || 'new'}-${index}`}>
+              <div className="settings-fields-row">
                 <input
-                  className="input"
+                  className="input settings-field-name"
                   placeholder="Название"
                   value={field.name}
-                  onChange={(e) =>
-                    setFields((prev) => prev.map((item, idx) => (idx === index ? { ...item, name: e.target.value } : item)))
-                  }
+                  onChange={(e) => updateField(index, { name: e.target.value })}
                 />
                 <select
-                  className="input"
+                  className="input settings-field-type"
                   value={field.type}
-                  onChange={(e) =>
-                    setFields((prev) =>
-                      prev.map((item, idx) => {
-                        if (idx !== index) return item;
-                        const nextType = e.target.value;
-                        return {
-                          ...item,
-                          type: nextType,
-                          options: nextType === 'select' ? (Array.isArray(item.options) ? item.options : []) : []
-                        };
-                      })
-                    )
-                  }
+                  onChange={(e) => {
+                    const nextType = e.target.value;
+                    updateField(index, {
+                      type: nextType,
+                      options: nextType === 'select' ? (field.options || []) : []
+                    });
+                  }}
                 >
                   <option value="barcode">barcode</option>
                   <option value="text">text</option>
@@ -202,207 +246,251 @@ export default function SettingsPage() {
                   <option value="image">image</option>
                   <option value="select">select</option>
                 </select>
-                <label className="check">
+                <label className="settings-row-check settings-field-req">
                   <input
                     type="checkbox"
                     checked={!!field.required}
-                    onChange={(e) =>
-                      setFields((prev) => prev.map((item, idx) => (idx === index ? { ...item, required: e.target.checked } : item)))
-                    }
+                    onChange={(e) => updateField(index, { required: e.target.checked })}
                   />
-                  Обязательное
+                  Да
                 </label>
-                <label className="check">
+                <label className="settings-row-check settings-field-show">
                   <input
                     type="checkbox"
                     checked={field.showInTable !== false}
-                    onChange={(e) =>
-                      setFields((prev) => prev.map((item, idx) => (idx === index ? { ...item, showInTable: e.target.checked } : item)))
-                    }
+                    onChange={(e) => updateField(index, { showInTable: e.target.checked })}
                   />
-                  В таблице
+                  Да
                 </label>
                 <button
-                  className="btn btn-danger btn-icon"
-                  onClick={() => setFields((prev) => prev.filter((_, idx) => idx !== index))}
                   type="button"
+                  className="settings-row-del settings-field-del"
                   aria-label="Удалить поле"
                   title="Удалить поле"
+                  onClick={() => setFields((prev) => prev.filter((_, idx) => idx !== index))}
                 >
-                  <TrashIcon />
+                  ×
                 </button>
               </div>
 
               {field.type === 'select' && (
-                <div className="select-options-editor">
-                  <div className="select-options-title">Значения списка:</div>
-                  <div className="select-options-list">
-                    {(field.options || []).map((option, optionIndex) => (
-                      <div className="select-option-row" key={`${field.name}-${optionIndex}`}>
-                        <input
-                          className="input"
-                          placeholder="Значение"
-                          value={option}
-                          onChange={(e) =>
-                            setFields((prev) =>
-                              prev.map((item, idx) => {
-                                if (idx !== index) return item;
-                                const nextOptions = [...(item.options || [])];
-                                nextOptions[optionIndex] = e.target.value;
-                                return { ...item, options: nextOptions };
-                              })
-                            )
-                          }
-                        />
-                        <button
-                          className="btn btn-danger btn-icon"
-                          onClick={() =>
-                            setFields((prev) =>
-                              prev.map((item, idx) => {
-                                if (idx !== index) return item;
-                                return {
-                                  ...item,
-                                  options: (item.options || []).filter((_, idx2) => idx2 !== optionIndex)
-                                };
-                              })
-                            )
-                          }
-                          type="button"
-                          aria-label="Удалить значение"
-                          title="Удалить значение"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                <div className="settings-fields-subrow">
+                  <span className="settings-subrow-label">Значения:</span>
+                  {(field.options || []).map((option, optionIndex) => (
+                    <span className="settings-chip" key={`opt-${index}-${optionIndex}`}>
+                      <input
+                        className="settings-chip-input"
+                        value={option}
+                        placeholder="значение"
+                        style={{ width: `${Math.max(6, (option || '').length + 1)}ch` }}
+                        onChange={(e) => updateFieldOption(index, optionIndex, e.target.value)}
+                      />
+                      <button
+                        type="button"
+                        className="settings-chip-x"
+                        aria-label="Удалить значение"
+                        onClick={() => removeFieldOption(index, optionIndex)}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
                   <button
-                    className="btn"
                     type="button"
-                    onClick={() =>
-                      setFields((prev) =>
-                        prev.map((item, idx) => {
-                          if (idx !== index) return item;
-                          return { ...item, options: [...(item.options || []), ''] };
-                        })
-                      )
-                    }
+                    className="settings-chip-add"
+                    onClick={() => addFieldOption(index)}
                   >
-                    + Добавить значение
+                    + добавить
                   </button>
                 </div>
               )}
             </div>
           ))}
-        </div>
-        <div className="modal-actions">
-          <button className="btn" onClick={() => setFields((prev) => [...prev, { ...defaultField }])}>+ Поле</button>
-          <button className="btn btn-primary" onClick={() => saveFieldsMutation.mutate()} disabled={saveFieldsMutation.isPending}>Сохранить</button>
-        </div>
-      </section>
-
-      <section className="card">
-        <h3>Google Sheets</h3>
-        <div className="form-row two-cols">
-          <label>Spreadsheet ID<input className="input" value={google.spreadsheetId || ''} onChange={(e) => setGoogle((s) => ({ ...s, spreadsheetId: e.target.value }))} /></label>
-          <label>Лист<input className="input" value={google.sheetName || ''} onChange={(e) => setGoogle((s) => ({ ...s, sheetName: e.target.value }))} /></label>
-          <label>Колонка SKU<input className="input" value={google.skuColumn || ''} onChange={(e) => setGoogle((s) => ({ ...s, skuColumn: e.target.value }))} /></label>
-          <label>Колонка Qty<input className="input" value={google.quantityColumn || ''} onChange={(e) => setGoogle((s) => ({ ...s, quantityColumn: e.target.value }))} /></label>
-          <label>Start row<input className="input" type="number" value={google.startRow || 2} onChange={(e) => setGoogle((s) => ({ ...s, startRow: Number(e.target.value || 2) }))} /></label>
-        </div>
-        <div className="modal-actions">
-          <button className="btn btn-primary" onClick={() => saveGoogleMutation.mutate()}>Сохранить</button>
-          <button className="btn" onClick={() => testGoogleMutation.mutate()}>Проверить</button>
-          <button className="btn" onClick={() => syncGoogleMutation.mutate()}>Синхронизировать</button>
-        </div>
-      </section>
-
-      <section className="card">
-        <h3>OZON</h3>
-        <div className="form-row two-cols">
-          <label>Client ID<input className="input" value={ozon.clientId} onChange={(e) => setOzon((s) => ({ ...s, clientId: e.target.value }))} /></label>
-          <label>API Key<input className="input" value={ozon.apiKey} onChange={(e) => setOzon((s) => ({ ...s, apiKey: e.target.value }))} /></label>
-          <label>
-            Начало синхронизации
-            <input
-              ref={ozonSyncDateRef}
-              className="input"
-              type="datetime-local"
-              value={ozon.syncStartDate}
-              onClick={() => ozonSyncDateRef.current?.showPicker?.()}
-              onChange={(e) => setOzon((s) => ({ ...s, syncStartDate: e.target.value }))}
-            />
-          </label>
-        </div>
-        <div className="modal-actions">
-          <button className="btn btn-primary" onClick={() => saveOzonMutation.mutate()}>Сохранить</button>
-          <button className="btn" onClick={() => loadOzonStatsMutation.mutate()}>Загрузить статистику OZON</button>
-        </div>
-
-        {ozonStats.length > 0 && (
-          <div className="table-wrap">
-            <table className="table compact">
-              <thead>
-                <tr>
-                  <th>День</th>
-                  <th>Заказов</th>
-                  <th>SKU</th>
-                  <th>Штук</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ozonStats.map((item, idx) => (
-                  <tr key={`${item.day}-${idx}`}>
-                    <td>{(item.day || '').slice(0, 10)}</td>
-                    <td>{item.orderCount}</td>
-                    <td>{item.skuCount}</td>
-                    <td>{item.itemsCount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section className="card">
-        <h3>Технические операции</h3>
-        <p className="import-subtitle">
-          Очистка состояния удалит историю движений и данные синхронизации, но сохранит справочник товаров и настройки.
-        </p>
-        <div className="modal-actions">
-          <button className="btn btn-danger" type="button" onClick={() => setConfirmResetOpen(true)}>
-            Очистить состояние товаров
-          </button>
-        </div>
-      </section>
-
-      {confirmResetOpen && (
-        <div className="modal-backdrop" onClick={() => setConfirmResetOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h3>Подтверждение очистки</h3>
-            <p className="danger-note">
-              Действие удалит операции, списания и OZON-таблицы синхронизации, а остатки всех товаров будут сброшены в 0.
-            </p>
-            <p className="import-subtitle">
-              Товары, кастомные поля и настройки API/Google/OZON останутся без изменений.
-            </p>
-            <div className="modal-actions">
-              <button className="btn" type="button" onClick={() => setConfirmResetOpen(false)}>
-                Отмена
-              </button>
-              <button
-                className="btn btn-danger"
-                type="button"
-                onClick={() => resetStateMutation.mutate()}
-                disabled={resetStateMutation.isPending}
-              >
-                {resetStateMutation.isPending ? 'Очистка...' : 'Да, очистить'}
-              </button>
-            </div>
+          <div className="settings-fields-footer">
+            <button
+              type="button"
+              className="btn"
+              onClick={() => setFields((prev) => [...prev, { ...defaultField }])}
+            >
+              + Добавить поле
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => saveFieldsMutation.mutate()}
+              disabled={saveFieldsMutation.isPending}
+            >
+              Сохранить
+            </button>
           </div>
         </div>
       )}
+
+      {activeTab === 'gsheets' && (
+        <div className="settings-section settings-section-pad">
+          <div className="settings-form-grid">
+            <div className="settings-form-field settings-field-full">
+              <span className="settings-form-label">Spreadsheet ID</span>
+              <input
+                className="input"
+                value={google.spreadsheetId || ''}
+                onChange={(e) => setGoogle((s) => ({ ...s, spreadsheetId: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Лист</span>
+              <input
+                className="input"
+                value={google.sheetName || ''}
+                onChange={(e) => setGoogle((s) => ({ ...s, sheetName: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Колонка SKU</span>
+              <input
+                className="input"
+                value={google.skuColumn || ''}
+                onChange={(e) => setGoogle((s) => ({ ...s, skuColumn: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Колонка Qty</span>
+              <input
+                className="input"
+                value={google.quantityColumn || ''}
+                onChange={(e) => setGoogle((s) => ({ ...s, quantityColumn: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Start row</span>
+              <input
+                className="input"
+                type="number"
+                value={google.startRow || 2}
+                onChange={(e) => setGoogle((s) => ({ ...s, startRow: Number(e.target.value || 2) }))}
+              />
+            </div>
+          </div>
+          <div className="settings-form-actions">
+            <button type="button" className="btn" onClick={() => testGoogleMutation.mutate()}>Проверить</button>
+            <button type="button" className="btn" onClick={() => syncGoogleMutation.mutate()}>Синхронизировать</button>
+            <button type="button" className="btn btn-primary" onClick={() => saveGoogleMutation.mutate()}>Сохранить</button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'ozon' && (
+        <div className="settings-section settings-section-pad">
+          <div className="settings-form-grid">
+            <div className="settings-form-field">
+              <span className="settings-form-label">Client ID</span>
+              <input
+                className="input"
+                value={ozon.clientId}
+                onChange={(e) => setOzon((s) => ({ ...s, clientId: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">API Key</span>
+              <input
+                className="input"
+                type="password"
+                value={ozon.apiKey}
+                onChange={(e) => setOzon((s) => ({ ...s, apiKey: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Начало синхронизации</span>
+              <input
+                ref={ozonSyncDateRef}
+                className="input"
+                type="datetime-local"
+                value={ozon.syncStartDate}
+                onClick={() => ozonSyncDateRef.current?.showPicker?.()}
+                onChange={(e) => setOzon((s) => ({ ...s, syncStartDate: e.target.value }))}
+              />
+            </div>
+          </div>
+          <div className="settings-form-actions">
+            <button type="button" className="btn" onClick={() => loadOzonStatsMutation.mutate()}>
+              Загрузить статистику OZON
+            </button>
+            <button type="button" className="btn btn-primary" onClick={() => saveOzonMutation.mutate()}>
+              Сохранить
+            </button>
+          </div>
+
+          {ozonStats.length > 0 && (
+            <div className="table-wrap" style={{ marginTop: 16 }}>
+              <table className="table compact">
+                <thead>
+                  <tr>
+                    <th>День</th>
+                    <th>Заказов</th>
+                    <th>SKU</th>
+                    <th>Штук</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ozonStats.map((item, idx) => (
+                    <tr key={`${item.day}-${idx}`}>
+                      <td>{(item.day || '').slice(0, 10)}</td>
+                      <td>{item.orderCount}</td>
+                      <td>{item.skuCount}</td>
+                      <td>{item.itemsCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'danger' && (
+        <div className="settings-danger-zone">
+          <h4 className="settings-danger-title">Опасная зона</h4>
+          <p className="settings-danger-desc">
+            Очистка состояния удалит историю движений и данные синхронизации, но сохранит справочник товаров и настройки. Это действие необратимо.
+          </p>
+          <button
+            type="button"
+            className="btn-danger-ghost"
+            onClick={() => setConfirmResetOpen(true)}
+          >
+            Очистить состояние товаров
+          </button>
+        </div>
+      )}
+
+      <Modal
+        open={confirmResetOpen}
+        onClose={() => setConfirmResetOpen(false)}
+        title="Подтверждение очистки"
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="btn-cancel" onClick={() => setConfirmResetOpen(false)}>
+              Отмена
+            </button>
+            <button
+              className="btn btn-danger"
+              type="button"
+              onClick={() => resetStateMutation.mutate()}
+              disabled={resetStateMutation.isPending}
+            >
+              {resetStateMutation.isPending ? 'Очистка...' : 'Да, очистить'}
+            </button>
+          </>
+        }
+      >
+        <p className="danger-note">
+          Действие удалит операции, списания и OZON-таблицы синхронизации, а остатки всех товаров будут сброшены в 0.
+        </p>
+        <p className="import-subtitle">
+          Товары, кастомные поля и настройки API/Google/OZON останутся без изменений.
+        </p>
+      </Modal>
     </div>
   );
 }
