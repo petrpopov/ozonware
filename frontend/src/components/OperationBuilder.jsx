@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { TrashIcon } from './Icons.jsx';
+import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
 
 export default function OperationBuilder({
   products,
@@ -36,7 +37,7 @@ export default function OperationBuilder({
 
   const getProductPhoto = (product) => {
     if (!product) return '';
-    const field = (product.custom_fields || []).find((f) => String(f.name || '').trim() === 'Фото OZON');
+    const field = (product.custom_fields || []).find((f) => String(f.name || '').trim() === FIELD_NAME_OZON_PHOTO);
     return String(field?.value || '').trim();
   };
 

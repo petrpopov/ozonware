@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { services } from '../api/services.js';
 import { EditIcon, TrashIcon } from './Icons.jsx';
+import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
 
 export default function OperationsHistory({
   operations,
@@ -49,13 +50,13 @@ export default function OperationsHistory({
   );
   const getPhoto = (product) => {
     if (!product) return '';
-    const field = (product.custom_fields || []).find((f) => String(f.name || '').trim() === 'Фото OZON');
+    const field = (product.custom_fields || []).find((f) => String(f.name || '').trim() === FIELD_NAME_OZON_PHOTO);
     return String(field?.value || '').trim();
   };
   const getPositionsCount = (op) => {
     const itemsCount = Array.isArray(op?.items) ? op.items.length : 0;
     if (itemsCount > 0) return itemsCount;
-    if (op?.type === 'correction' && Array.isArray(op?.differences)) {
+    if (op?.type_code === 'correction' && Array.isArray(op?.differences)) {
       return op.differences.length;
     }
     return 0;
@@ -94,7 +95,7 @@ export default function OperationsHistory({
       }));
     }
 
-    if (selectedOperation.type === 'correction' && Array.isArray(selectedOperation.differences)) {
+    if (selectedOperation.type_code === 'correction' && Array.isArray(selectedOperation.differences)) {
       return selectedOperation.differences.map((diff, index) => ({
         key: `${diff.productId || diff.productSKU || diff.productName || 'corr'}-${index}`,
         productId: Number(diff.productId || 0) || null,
@@ -236,11 +237,13 @@ export default function OperationsHistory({
                 <td>{op.id}</td>
                 <td>{(op.operation_date || '').slice(0, 10)}</td>
                 {showOperationType && (
-                  <td>{resolveOperationTypeLabel ? resolveOperationTypeLabel(op) : (op.type || '—')}</td>
+                  <td>{resolveOperationTypeLabel ? resolveOperationTypeLabel(op) : (op.type_code || '—')}</td>
                 )}
                 <td>{getPositionsCount(op)}</td>
                 <td>{op.total_quantity}</td>
                 <td>
+                  {op.channel_code === 'ozon_fbs' && <span className="channel-badge channel-badge--fbs">OZON FBS</span>}
+                  {op.channel_code === 'ozon_fbo' && <span className="channel-badge channel-badge--fbo">OZON FBO</span>}
                   <span className="cell-ellipsis" title={op.note || '—'}>{op.note || '—'}</span>
                 </td>
                 <td className="row-actions">
@@ -291,7 +294,7 @@ export default function OperationsHistory({
           <div className="stack-sm">
                 <div className="import-result">
                   Дата: <strong>{(selectedOperation.operation_date || '').slice(0, 10) || '—'}</strong> · Тип:{' '}
-                  <strong>{selectedOperation.type || '—'}</strong> · Позиций: <strong>{detailItems.length}</strong> ·
+                  <strong>{selectedOperation.type_code || '—'}</strong> · Позиций: <strong>{detailItems.length}</strong> ·
                   Всего штук: <strong>{selectedOperation.total_quantity || 0}</strong>
                 </div>
                 <div className="import-result">

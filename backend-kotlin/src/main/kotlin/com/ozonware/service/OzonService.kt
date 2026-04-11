@@ -9,7 +9,6 @@ import com.ozonware.entity.OzonFboSupply
 import com.ozonware.entity.OzonFboSupplyItem
 import com.ozonware.entity.OzonPosting
 import com.ozonware.entity.OzonPostingItem
-import com.ozonware.entity.Operation
 import com.ozonware.entity.Product
 import com.ozonware.exception.BadRequestException
 import com.ozonware.repository.OzonFboSupplyItemRepository
@@ -42,12 +41,14 @@ import java.util.concurrent.atomic.AtomicLong
 class OzonService(
     private val productRepository: ProductRepository,
     private val operationRepository: OperationRepository,
+    private val operationsWriterService: OperationsWriterService,
     private val ozonPostingRepository: OzonPostingRepository,
     private val ozonPostingItemRepository: OzonPostingItemRepository,
     private val ozonFboSupplyRepository: OzonFboSupplyRepository,
     private val ozonFboSupplyItemRepository: OzonFboSupplyItemRepository,
     private val productMatcher: ProductMatcher,
     private val settingsService: SettingsService,
+    private val productFieldsService: ProductFieldsService,
     private val ozonProperties: OzonProperties,
     private val entityManager: EntityManager,
     private val objectMapper: ObjectMapper
@@ -563,7 +564,7 @@ class OzonService(
         val apiKey = settings["apiKey"]?.asText()
             ?: throw BadRequestException("OZON Client ID and API Key are required")
 
-        ensureOzonPhotoField()
+        productFieldsService.ensureSystemField("Фото OZON", "ozon_photo", "image")
 
         val offerIds = mutableListOf<String>()
         var lastId = ""
@@ -636,17 +637,10 @@ class OzonService(
                     continue
                 }
 
-                val nextCustomFields = buildCustomFieldsWithPhoto(product.customFields, imageUrl)
-                val prevPhoto = product.customFields
-                    .firstOrNull { (it["name"] as? String) == "Фото OZON" }?.get("value") as? String
-
+                val prevPhoto = productFieldsService.readPhotoUrl(product.id!!)
                 if (prevPhoto == imageUrl) continue
 
-                entityManager.createNativeQuery(
-                    "UPDATE products SET custom_fields = ?::jsonb, updated_at = NOW() WHERE id = ?"
-                ).setParameter(1, objectMapper.writeValueAsString(nextCustomFields))
-                    .setParameter(2, product.id)
-                    .executeUpdate()
+                productFieldsService.writeTextValue(product.id!!, "ozon_photo", imageUrl)
                 updated++
             }
         }
@@ -663,82 +657,24 @@ class OzonService(
         )
     }
 
-    private fun ensureOzonPhotoField() {
-        val exists = entityManager.createNativeQuery(
-            "SELECT id FROM product_fields WHERE name = 'Фото OZON' LIMIT 1"
-        ).resultList.isNotEmpty()
-
-        if (!exists) {
-            entityManager.createNativeQuery(
-                "INSERT INTO product_fields (name, type, required, show_in_table, options, position) VALUES (?, ?, ?, ?, ?::jsonb, ?)"
-            ).setParameter(1, "Фото OZON")
-                .setParameter(2, "text")
-                .setParameter(3, false)
-                .setParameter(4, false)
-                .setParameter(5, "[]")
-                .setParameter(6, 999)
-                .executeUpdate()
-        }
-    }
-
-    private fun buildCustomFieldsWithPhoto(
-        customFields: List<Map<String, Any>>,
-        photoUrl: String
-    ): List<Map<String, Any>> {
-        val normalized = customFields.toMutableList()
-        val idx = normalized.indexOfFirst { (it["name"] as? String) == "Фото OZON" }
-        val nextField = mapOf<String, Any>(
-            "name" to "Фото OZON",
-            "type" to "text",
-            "value" to photoUrl,
-            "required" to false
-        )
-
-        return if (idx >= 0) {
-            normalized[idx] = nextField
-            normalized
-        } else {
-            normalized + nextField
-        }
-    }
-
     // ── Shipment creation ──
 
     @Transactional
     fun createShipments(selectedDays: List<String>? = null): Map<String, Any?> {
-        // Load daily stats
         val groupedByDay = loadDailyStats()
-
-        val daysToProcess = if (selectedDays != null) {
-            groupedByDay.filter { it["day"] in selectedDays }
-        } else {
-            groupedByDay
-        }
-
+        val daysToProcess = if (selectedDays != null) groupedByDay.filter { it["day"] in selectedDays } else groupedByDay
         val results = mutableListOf<Map<String, Any?>>()
 
         for (day in daysToProcess) {
             val dayStr = day["day"] as String
             val dayItems = day["items"] as List<*>
 
-            val existingOp = findExistingFbsOperation(dayStr)
-
-            // Rollback existing
-            if (existingOp != null && existingOp["items"] is List<*>) {
-                @Suppress("UNCHECKED_CAST")
-                for (oldItem in existingOp["items"] as List<Map<String, Any>>) {
-                    val productId = (oldItem["productId"] as? Number)?.toLong() ?: continue
-                    val qty = (oldItem["quantity"] as? Number)?.toInt() ?: 0
-                    entityManager.createNativeQuery(
-                        "UPDATE products SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?"
-                    ).setParameter(1, qty).setParameter(2, productId).executeUpdate()
-                }
-                clearPostingFlagsForOperation((existingOp["id"] as Number).toLong())
-            }
+            val existingOp = operationRepository.findByTypeCodeAndChannelCodeAndOperationDate(
+                "shipment", "ozon_fbs", LocalDate.parse(dayStr)
+            ).firstOrNull()
 
             val cache = productMatcher.buildLookupCache()
-            val items = mutableListOf<Map<String, Any?>>()
-            var totalQuantity = 0
+            val itemInputs = mutableListOf<RecordOperationCommand.ItemInput>()
             val errors = mutableListOf<String>()
 
             for (rawItem in dayItems) {
@@ -754,90 +690,63 @@ class OzonService(
                     continue
                 }
 
-                if (dbItem.quantity < requiredQty) {
-                    errors += "Недостаточно товара ${dbItem.sku} (${dbItem.name}). На складе: ${dbItem.quantity}, требуется: $requiredQty, не хватает: ${requiredQty - dbItem.quantity}"
-                    continue
-                }
-
-                items += mapOf<String, Any?>(
-                    "quantity" to requiredQty,
-                    "productId" to dbItem.id,
-                    "productSKU" to dbItem.sku,
-                    "productName" to dbItem.name
+                itemInputs += RecordOperationCommand.ItemInput(
+                    productId = dbItem.id!!,
+                    quantity = requiredQty,
+                    productName = dbItem.name,
+                    productSku = dbItem.sku
                 )
-                totalQuantity += requiredQty
-
-                entityManager.createNativeQuery(
-                    "UPDATE products SET quantity = quantity - ?, updated_at = NOW() WHERE id = ?"
-                ).setParameter(1, requiredQty).setParameter(2, dbItem.id).executeUpdate()
             }
 
             if (errors.isNotEmpty()) {
-                results += mapOf(
-                    "day" to dayStr,
-                    "status" to "error",
-                    "errorCount" to errors.size,
-                    "errors" to errors
-                )
+                results += mapOf("day" to dayStr, "status" to "error", "errorCount" to errors.size, "errors" to errors)
                 continue
             }
 
-            if (items.isEmpty()) {
+            if (itemInputs.isEmpty()) {
                 results += mapOf("day" to dayStr, "status" to "error", "error" to "Нет товаров для отгрузки")
                 continue
             }
 
-            val note = "OZON FBS от $dayStr"
+            val cmd = RecordOperationCommand(
+                typeCode = "shipment",
+                channelCode = "ozon_fbs",
+                operationDate = LocalDate.parse(dayStr),
+                note = "OZON FBS от $dayStr",
+                items = itemInputs
+            )
+
             val opResult = if (existingOp != null) {
-                entityManager.createNativeQuery(
-                    """UPDATE operations SET note = ?, items = ?::jsonb, total_quantity = ?, differences = ?::jsonb, updated_at = NOW() WHERE id = ? RETURNING *""",
-                    Operation::class.java
-                ).setParameter(1, note)
-                    .setParameter(2, objectMapper.writeValueAsString(items))
-                    .setParameter(3, totalQuantity)
-                    .setParameter(4, objectMapper.writeValueAsString(emptyList<Map<String, Any?>>()))
-                    .setParameter(5, (existingOp["id"] as Number).toLong())
-                    .resultList
+                operationsWriterService.updateOperation(existingOp.id!!, cmd)
             } else {
-                entityManager.createNativeQuery(
-                    """INSERT INTO operations (type, operation_date, note, items, total_quantity, differences) VALUES (?, ?, ?, ?::jsonb, ?, ?::jsonb) RETURNING *""",
-                    Operation::class.java
-                ).setParameter(1, "shipment")
-                    .setParameter(2, dayStr)
-                    .setParameter(3, note)
-                    .setParameter(4, objectMapper.writeValueAsString(items))
-                    .setParameter(5, totalQuantity)
-                    .setParameter(6, objectMapper.writeValueAsString(emptyList<Map<String, Any?>>()))
-                    .resultList
+                operationsWriterService.recordOperation(cmd)
             }
 
-            @Suppress("UNCHECKED_CAST")
-            val operation = (opResult as List<Operation>).first()
+            val operationId = (opResult["id"] as? Number)?.toLong() ?: 0L
 
             entityManager.createNativeQuery(
                 """UPDATE ozon_postings SET shipped = true, shipment_applied = true, shipment_operation_id = ?, updated_at = NOW()
                    WHERE (in_process_at AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')::date = ?::date"""
-            ).setParameter(1, operation.id).setParameter(2, dayStr).executeUpdate()
+            ).setParameter(1, operationId).setParameter(2, dayStr).executeUpdate()
 
             results += mapOf(
                 "day" to dayStr,
                 "status" to if (existingOp != null) "replaced" else "success",
-                "operationId" to operation.id,
-                "itemsCount" to items.size,
-                "totalQuantity" to totalQuantity
+                "operationId" to operationId,
+                "itemsCount" to itemInputs.size,
+                "totalQuantity" to itemInputs.sumOf { it.quantity }
             )
         }
 
         val successCount = results.count { it["status"] in listOf("success", "replaced") }
         val errorCount = results.count { it["status"] == "error" }
-        val alreadyProcessedCount = results.count { it["status"] == "already_processed" }
 
         return mapOf(
             "summary" to mapOf(
                 "total" to results.size,
                 "success" to successCount,
                 "errors" to errorCount,
-                "alreadyProcessed" to alreadyProcessedCount
+                "alreadyProcessed" to 0
             ),
             "details" to results
         )
@@ -858,7 +767,12 @@ class OzonService(
         val dayMap = mutableMapOf<String, MutableMap<String, Any?>>()
 
         for (row in rows) {
-            val day = (row[3] as? java.time.LocalDate)?.toString() ?: continue
+            // PGJDBC may return java.sql.Date or java.time.LocalDate depending on driver version
+            val day: String = when (val rawDay = row[3]) {
+                is java.time.LocalDate -> rawDay.toString()
+                is java.sql.Date -> rawDay.toLocalDate().toString()
+                else -> continue
+            }
 
             val dayGroup = dayMap.getOrPut(day) {
                 val group = mutableMapOf<String, Any?>(
@@ -874,8 +788,16 @@ class OzonService(
                 group
             }
 
+            // JSONB comes back as Map when already deserialized by Hibernate,
+            // or as PGobject / String when returned via raw native query.
             @Suppress("UNCHECKED_CAST")
-            val rawData = row[4] as? Map<String, Any?>
+            val rawData: Map<String, Any?>? = when (val rawCol = row[4]) {
+                is Map<*, *> -> rawCol as Map<String, Any?>
+                null -> null
+                else -> try {
+                    objectMapper.readValue(rawCol.toString(), Map::class.java) as Map<String, Any?>
+                } catch (_: Exception) { null }
+            }
             val products = rawData?.get("products") as? List<*> ?: emptyList<Any>()
 
             val order = mutableMapOf<String, Any?>(
@@ -934,28 +856,6 @@ class OzonService(
         }
 
         return groupedByDay
-    }
-
-    private fun findExistingFbsOperation(day: String): Map<String, Any?>? {
-        val result = entityManager.createNativeQuery(
-            """SELECT * FROM operations WHERE type = 'shipment' AND operation_date = ?::date AND note LIKE 'OZON FBS от %' ORDER BY id DESC LIMIT 1"""
-        ).setParameter(1, day).resultList
-
-        @Suppress("UNCHECKED_CAST")
-        val rows = result as List<Array<Any?>>
-        if (rows.isEmpty()) return null
-
-        val row = rows[0]
-        return mapOf<String, Any?>(
-            "id" to ((row[0] as? Number)?.toLong() ?: 0L) as Any?,
-            "items" to emptyList<Map<String, Any?>>()
-        )
-    }
-
-    private fun clearPostingFlagsForOperation(operationId: Long) {
-        entityManager.createNativeQuery(
-            "UPDATE ozon_postings SET shipment_applied = false, shipment_operation_id = NULL, updated_at = NOW() WHERE shipment_operation_id = ?"
-        ).setParameter(1, operationId).executeUpdate()
     }
 
     private fun parseTimestamp(s: String): LocalDateTime? {

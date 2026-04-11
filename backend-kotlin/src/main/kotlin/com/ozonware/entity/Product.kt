@@ -1,8 +1,6 @@
 package com.ozonware.entity
 
-import io.hypersistence.utils.hibernate.type.json.JsonType
 import jakarta.persistence.*
-import org.hibernate.annotations.Type
 import java.time.LocalDateTime
 
 @Entity
@@ -23,10 +21,6 @@ data class Product(
 
     @Column(columnDefinition = "TEXT")
     var description: String = "",
-
-    @Type(JsonType::class)
-    @Column(columnDefinition = "jsonb")
-    var customFields: List<Map<String, Any>> = emptyList(),
 
     @Column(name = "created_at")
     var createdAt: LocalDateTime? = null,

@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { services } from '../api/services.js';
 import { useUiStore } from '../store/useUiStore.js';
 import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
+import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
 
 const emptyForm = {
   id: null,
@@ -154,7 +155,7 @@ export default function ProductCardPage() {
 
   const canDelete = usageQuery.data?.can_delete === true;
   const operationsCount = Number(usageQuery.data?.operations_count || 0);
-  const photoField = (form.custom_fields || []).find((field) => String(field.name || '').trim() === 'Фото OZON');
+  const photoField = (form.custom_fields || []).find((field) => String(field.name || '').trim() === FIELD_NAME_OZON_PHOTO);
   const photo = String(photoField?.value || '').trim();
   const extStats = productStatsQuery.data || {};
   const warehouse = extStats.warehouse || {};

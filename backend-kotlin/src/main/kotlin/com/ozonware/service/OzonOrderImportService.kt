@@ -7,6 +7,7 @@ import com.ozonware.exception.BadRequestException
 import com.ozonware.exception.ResourceNotFoundException
 import com.ozonware.repository.OzonOrderImportBatchRepository
 import com.ozonware.repository.OzonOrderLineRepository
+import com.ozonware.repository.OzonPostingRepository
 import com.ozonware.repository.ProductRepository
 import com.ozonware.util.ProductMatcher
 import jakarta.persistence.EntityManager
@@ -15,11 +16,13 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 @Service
 class OzonOrderImportService(
     private val batchRepository: OzonOrderImportBatchRepository,
     private val orderLineRepository: OzonOrderLineRepository,
+    private val ozonPostingRepository: OzonPostingRepository,
     private val productRepository: ProductRepository,
     private val productMatcher: ProductMatcher,
     private val entityManager: EntityManager,
@@ -44,10 +47,19 @@ class OzonOrderImportService(
         val batch = OzonOrderImportBatch(
             source = source!!,
             fileName = fileName,
-            importedAt = LocalDateTime.now(),
+            importedAt = LocalDateTime.now(ZoneOffset.UTC),
             rowsTotal = rows.size
         )
         batchRepository.save(batch)
+
+        // Build posting_number → id cache to populate FK on import
+        val postingNumbersInBatch = rows.mapNotNull {
+            getCell(it, "Номер отправления").trim().ifEmpty { null }
+        }.distinct()
+        val postingIdCache = mutableMapOf<String, Long>()
+        for (num in postingNumbersInBatch) {
+            ozonPostingRepository.findByPostingNumber(num).ifPresent { postingIdCache[num] = it.id!! }
+        }
 
         val cache = productMatcher.buildLookupCache()
         var saved = 0
@@ -132,8 +144,9 @@ class OzonOrderImportService(
                 existingLine.volumetricWeightKg = parseDecimal(getCell(rawRow, "Объемный вес товаров, кг"))
                 existingLine.productId = matchedProduct?.id
                 existingLine.matchedBy = matchedBy
+                existingLine.postingId = postingIdCache[postingNumber]
                 existingLine.raw = rawRow
-                existingLine.updatedAt = LocalDateTime.now()
+                existingLine.updatedAt = LocalDateTime.now(ZoneOffset.UTC)
                 orderLineRepository.save(existingLine)
                 updated++
             } else {
@@ -165,6 +178,7 @@ class OzonOrderImportService(
                     volumetricWeightKg = parseDecimal(getCell(rawRow, "Объемный вес товаров, кг")),
                     productId = matchedProduct?.id,
                     matchedBy = matchedBy,
+                    postingId = postingIdCache[postingNumber],
                     raw = rawRow.filterValues { it != null } as Map<String, Any>
                 )
                 orderLineRepository.save(line)

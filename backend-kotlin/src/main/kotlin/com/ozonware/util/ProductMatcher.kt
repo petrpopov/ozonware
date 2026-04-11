@@ -1,12 +1,14 @@
 package com.ozonware.util
 
 import com.ozonware.entity.Product
+import com.ozonware.repository.ProductFieldValueRepository
 import com.ozonware.repository.ProductRepository
 import org.springframework.stereotype.Component
 
 @Component
 class ProductMatcher(
-    private val productRepository: ProductRepository
+    private val productRepository: ProductRepository,
+    private val productFieldValueRepository: ProductFieldValueRepository
 ) {
 
     data class LookupCache(
@@ -17,23 +19,24 @@ class ProductMatcher(
 
     fun buildLookupCache(): LookupCache {
         val products = productRepository.findAll()
-        val byOffer = mutableMapOf<String, Product>()
-        val byOzonSku = mutableMapOf<String, Product>()
-        val bySku = mutableMapOf<String, Product>()
+        val productById = products.associateBy { it.id }
+        val bySku = products.associateBy { it.sku.lowercase() }
 
-        for (product in products) {
-            bySku[product.sku.lowercase()] = product
-            for (field in product.customFields) {
-                val fieldName = (field["name"] as? String)?.lowercase() ?: continue
-                val fieldValue = field["value"] as? String ?: continue
-                if (fieldValue.isBlank()) continue
+        val articleValues = productFieldValueRepository.findAllByFieldKind("ozon_article")
+        val byOffer = articleValues
+            .filter { !it.valueText.isNullOrBlank() }
+            .mapNotNull { pfv ->
+                val product = productById[pfv.productId] ?: return@mapNotNull null
+                pfv.valueText!!.lowercase().trim() to product
+            }.toMap()
 
-                when (fieldName) {
-                    "артикул ozon" -> byOffer[fieldValue.lowercase().trim()] = product
-                    "ozon" -> byOzonSku[normalizeOzonSku(fieldValue)] = product
-                }
-            }
-        }
+        val skuValues = productFieldValueRepository.findAllByFieldKind("ozon_sku")
+        val byOzonSku = skuValues
+            .filter { !it.valueText.isNullOrBlank() }
+            .mapNotNull { pfv ->
+                val product = productById[pfv.productId] ?: return@mapNotNull null
+                normalizeOzonSku(pfv.valueText!!) to product
+            }.toMap()
 
         return LookupCache(byOffer, byOzonSku, bySku)
     }
@@ -43,49 +46,33 @@ class ProductMatcher(
         val skuString = ozonSku.trim()
         val searchValue = if (skuString.startsWith("OZN", ignoreCase = true)) skuString else "OZN$skuString"
 
-        // Try exact match in cache
         val cached = effectiveCache.byOzonSku[normalizeOzonSku(searchValue)]
         if (cached != null) return cached
 
-        // Fallback: query DB using jsonb_array_elements
-        val dbResult = productRepository.findAll().firstOrNull { product ->
-            product.customFields.any { field ->
-                (field["name"] as? String) == "OZON" && (field["value"] as? String) == searchValue
-            }
-        }
-        if (dbResult != null) return dbResult
-
         if (offerId.isNullOrBlank()) return null
-
         val trimmedOffer = offerId.trim()
         if (trimmedOffer.isEmpty()) return null
 
-        // Try offer_id match
         val offerCached = effectiveCache.byOffer[trimmedOffer.lowercase()]
         if (offerCached != null) return offerCached
 
-        // Fallback for markdown: suffix _dm or _dm###
+        // Fallback: markdown suffix _dm or _dm###
         val dmRegex = Regex("(_dm\\d*)$", RegexOption.IGNORE_CASE)
         if (dmRegex.containsMatchIn(trimmedOffer)) {
             val art = dmRegex.replace(trimmedOffer, "")
-
-            val dbResult2 = productRepository.findAll().firstOrNull { product ->
-                product.customFields.any { field ->
-                    (field["name"] as? String) == "Артикул OZON" && (field["value"] as? String) == art
-                }
-            }
-            if (dbResult2 != null) return dbResult2
+            val pfv = productFieldValueRepository.findAllByFieldKind("ozon_article")
+                .firstOrNull { it.valueText?.trim() == art }
+            if (pfv != null) return productRepository.findById(pfv.productId).orElse(null)
         }
 
         return null
     }
 
     fun findProductByOzonOfferId(offerId: String): Product? {
-        return productRepository.findAll().firstOrNull { product ->
-            product.customFields.any { field ->
-                (field["name"] as? String) == "Артикул OZON" && (field["value"] as? String) == offerId.trim()
-            }
-        }
+        val trimmed = offerId.trim()
+        val pfv = productFieldValueRepository.findAllByFieldKind("ozon_article")
+            .firstOrNull { it.valueText?.trim() == trimmed }
+        return pfv?.let { productRepository.findById(it.productId).orElse(null) }
     }
 
     private fun normalizeOzonSku(value: String): String {

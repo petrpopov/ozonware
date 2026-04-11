@@ -55,6 +55,8 @@ class ProductFieldController(
             "id" to field.id,
             "name" to field.name,
             "type" to field.type,
+            "kind" to field.kind,
+            "is_system" to field.isSystem,
             "required" to field.required,
             "show_in_table" to field.showInTable,
             "options" to field.options,

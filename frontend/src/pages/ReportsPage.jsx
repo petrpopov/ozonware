@@ -274,7 +274,7 @@ export default function ReportsPage() {
               {(operationsQuery.data || []).map((op) => (
                 <tr key={op.id}>
                   <td>{op.id}</td>
-                  <td>{op.type}</td>
+                  <td>{op.type_code}</td>
                   <td>{(op.operation_date || op.created_at || '').slice(0, 10)}</td>
                   <td>{op.total_quantity || 0}</td>
                   <td>{op.note || '—'}</td>

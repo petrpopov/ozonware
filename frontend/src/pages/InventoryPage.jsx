@@ -5,6 +5,7 @@ import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
 import { useUiStore } from '../store/useUiStore.js';
 import { TrashIcon } from '../components/Icons.jsx';
 import Modal from '../components/Modal.jsx';
+import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
 
 function normalize(value) {
   return String(value ?? '').trim().toLowerCase();
@@ -60,7 +61,7 @@ export default function InventoryPage() {
 
   const products = productsQuery.data || [];
   const getPhoto = (product) => {
-    const field = (product?.custom_fields || []).find((f) => String(f.name || '').trim() === 'Фото OZON');
+    const field = (product?.custom_fields || []).find((f) => String(f.name || '').trim() === FIELD_NAME_OZON_PHOTO);
     return String(field?.value || '').trim();
   };
 

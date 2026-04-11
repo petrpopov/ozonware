@@ -1,8 +1,6 @@
 package com.ozonware.entity
 
-import io.hypersistence.utils.hibernate.type.json.JsonType
 import jakarta.persistence.*
-import org.hibernate.annotations.Type
 import java.time.LocalDate
 import java.time.LocalDateTime
 
@@ -13,8 +11,17 @@ data class Operation(
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     val id: Long? = null,
 
-    @Column(nullable = false, length = 50)
-    var type: String,
+    @Column(name = "type_code", nullable = false, length = 32)
+    var typeCode: String = "",
+
+    @Column(name = "channel_code", nullable = false, length = 32)
+    var channelCode: String = "manual",
+
+    @Column(name = "parent_operation_id")
+    var parentOperationId: Long? = null,
+
+    @Column(name = "correction_reason_id")
+    var correctionReasonId: Long? = null,
 
     @Column(name = "operation_date")
     var operationDate: LocalDate? = null,
@@ -22,16 +29,8 @@ data class Operation(
     @Column(columnDefinition = "TEXT")
     var note: String? = null,
 
-    @Type(JsonType::class)
-    @Column(columnDefinition = "jsonb")
-    var items: List<Map<String, Any?>> = emptyList(),
-
     @Column(name = "total_quantity")
     var totalQuantity: Int = 0,
-
-    @Type(JsonType::class)
-    @Column(columnDefinition = "jsonb")
-    var differences: List<Map<String, Any?>> = emptyList(),
 
     @Column(name = "created_at")
     var createdAt: LocalDateTime? = null,
