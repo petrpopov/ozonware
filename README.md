@@ -6,19 +6,20 @@
 
 ```
 ozonware/
-├── frontend/          # React 18 + Vite (SPA)
-├── backend/           # Node.js + Express REST API
-├── database/          # PostgreSQL миграции
-├── nginx/             # Nginx конфигурация
-├── .memory_bank/      # Подробная документация для AI
-└── docker-compose.yml # Docker orchestration
+├── frontend/              # React 18 + Vite (SPA)
+├── backend-kotlin/        # Kotlin + Spring Boot 3.4 REST API
+├── nginx/                 # Nginx конфигурация
+├── .memory_bank/          # Подробная документация для AI
+├── docker-compose.yml     # Docker orchestration
+├── DESIGN.md              # Дизайн-система и принципы
+└── CLAUDE.md              # Инструкции для Claude Code
 ```
 
 ## Стек технологий
 
 - **Frontend**: React 18, React Router, TanStack Query, Zustand, Vite 6
-- **Backend**: Node.js 18, Express 4
-- **Database**: PostgreSQL 15
+- **Backend**: Kotlin, Spring Boot 3.4, Gradle, JPA/Hibernate
+- **Database**: PostgreSQL 15, Flyway миграции
 - **Web Server**: Nginx (Alpine)
 - **Containerization**: Docker, Docker Compose
 
@@ -46,19 +47,29 @@ API будет доступен по адресу: **http://localhost/api**
 
 ### Локальная разработка
 
-```bash
-# Терминал 1 — Backend
-cd backend
-npm install
-npm run dev          # port 3000
+**macOS**: infra в Docker, backend + frontend на хосте
 
-# Терминал 2 — Frontend
+```bash
+# Терминал 1 — Infra (PostgreSQL, RabbitMQ, MinIO)
+docker-compose up postgres rabbitmq minio
+
+# Терминал 2 — Backend (Kotlin + Spring Boot)
+cd backend-kotlin
+./gradlew bootRun              # port 3000
+
+# Терминал 3 — Frontend
 cd frontend
 npm install
-npm run dev          # port 3001, проксирует /api → localhost:3000
+npm run dev                    # port 3001, проксирует /api → localhost:3000
 ```
 
 Откройте **http://localhost:3001** в браузере.
+
+**Linux/Docker**: Полный стек в контейнерах
+
+```bash
+docker-compose up -d
+```
 
 ### Остановка приложения
 
@@ -134,13 +145,29 @@ docker-compose down -v
 
 ## База данных
 
+Миграции Flyway: `backend-kotlin/src/main/resources/db/migration/`
+
 ### Основные таблицы
 
 - **products** — Товары на складе
-- **operations** — Операции (приход, отгрузка, инвентаризация, списание, корректировка)
 - **product_fields** — Настройки кастомных полей
+- **product_field_options** — Значения для select-полей
+- **product_field_values** — Значения полей товара
+- **operations** — Операции (приход, отгрузка, инвентаризация, списание, корректировка)
+- **operation_items** — Строки операций с товарами
+- **operation_inventory_diffs** — Дельта инвентаризации
 - **user_settings** — Пользовательские настройки
-- **writeoffs** — Записи списаний (брак, потери, резерв)
+
+### Lookup таблицы
+
+- **operation_types** — Типы операций
+- **operation_channels** — Каналы (вручную, OZON FBS, OZON FBO, Google Sheets)
+- **writeoff_reasons** — Причины списания
+- **correction_reasons** — Причины корректировки
+- **warehouses** — Склады
+- **product_field_types** — Типы полей (text, select, number)
+- **ozon_posting_statuses** — Статусы заказов FBS
+- **ozon_supply_states** — Статусы поставок FBO
 
 ### OZON таблицы
 
@@ -168,19 +195,31 @@ docker exec -i warehouse-db psql -U warehouse_user openws < backup.sql
 
 ## Переменные окружения
 
-### Backend (`.env`)
+### Backend (`application.yml`)
 
-```env
-PORT=3000
-DB_HOST=postgres
-DB_PORT=5432
-DB_NAME=openws
-DB_USER=warehouse_user
-DB_PASSWORD=warehouse_password
-NODE_ENV=production
-GOOGLE_SERVICE_ACCOUNT_KEY=./google-credentials.json
-OZON_REQUEST_PAUSE_MS=1500
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/openws
+    username: warehouse_user
+    password: warehouse_password
+  jpa:
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+
+server:
+  port: 3000
+  servlet:
+    context-path: /api
 ```
+
+Конфигурация через переменные окружения:
+- `SPRING_DATASOURCE_URL` — PostgreSQL URL
+- `SPRING_DATASOURCE_USERNAME` — БД пользователь
+- `SPRING_DATASOURCE_PASSWORD` — БД пароль
+- `SERVER_PORT` — Порт (default 3000)
 
 ### Frontend (`.env`)
 
@@ -208,6 +247,17 @@ VITE_API_TARGET=http://localhost:3000
 
 ## Troubleshooting
 
+### Backend не компилируется
+
+```bash
+# Очистка Gradle кэша
+cd backend-kotlin
+./gradlew clean
+
+# Rebuild
+./gradlew bootRun
+```
+
 ### Backend не может подключиться к БД
 
 ```bash
@@ -217,29 +267,37 @@ docker-compose ps
 # Проверьте логи БД
 docker-compose logs postgres
 
-# Перезапустите с пересозданием
+# Проверьте URL и учётные данные в application.yml
+cat src/main/resources/application.yml
+
+# Перезапустите infra
 docker-compose down -v
-docker-compose up -d
+docker-compose up postgres
 ```
 
 ### Frontend не загружается
 
 ```bash
-# Проверьте логи nginx
-docker-compose logs nginx
+# Очистка зависимостей
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+npm run dev
 
-# Убедитесь что файлы скопированы
-docker exec warehouse-nginx ls -la /usr/share/nginx/html
+# Проверьте логи Vite
+# Должны быть в терминале где запущен npm run dev
 ```
 
-### API возвращает ошибки
+### Ошибки миграции БД
 
 ```bash
-# Проверьте логи backend
-docker-compose logs backend
+# Flyway логи находятся в логах Spring Boot
+# Проверьте что все V*.sql файлы в порядке
+ls -la backend-kotlin/src/main/resources/db/migration/
 
-# Проверьте health check
-curl http://localhost/api/health
+# Если нужен сброс (dev only!)
+docker-compose exec postgres psql -U warehouse_user -d openws -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+docker-compose restart backend-kotlin
 ```
 
 ## Production
