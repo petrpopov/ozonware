@@ -62,5 +62,10 @@ export const services = {
     return api.get(`/ozon/orders/product/${productId}/timeline${qs ? `?${qs}` : ''}`);
   },
 
-  resetWarehouseState: () => api.post('/maintenance/reset-state', {})
+  resetWarehouseState: () => api.post('/maintenance/reset-state', {}),
+
+  getDictionary: (name) => api.get(`/dictionaries/${name}`),
+  createDictionaryItem: (name, body) => api.post(`/dictionaries/${name}`, body),
+  updateDictionaryItem: (name, id, body) => api.patch(`/dictionaries/${name}/${id}`, body),
+  deleteDictionaryItem: (name, id) => api.del(`/dictionaries/${name}/${id}`),
 };

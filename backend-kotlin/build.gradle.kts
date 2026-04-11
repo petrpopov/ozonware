@@ -33,6 +33,8 @@ dependencies {
     implementation("com.google.auth:google-auth-library-oauth2-http:1.29.0")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.testcontainers:postgresql:1.20.4")
 }
 
 kotlin {

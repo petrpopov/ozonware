@@ -1,6 +1,7 @@
 package com.ozonware.controller
 
 import com.ozonware.exception.BadRequestException
+import com.ozonware.service.ProductFieldsService
 import com.ozonware.service.ProductService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
@@ -8,7 +9,8 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @RequestMapping("/api/products")
 class ProductController(
-    private val productService: ProductService
+    private val productService: ProductService,
+    private val productFieldsService: ProductFieldsService
 ) {
 
     @GetMapping
@@ -71,7 +73,7 @@ class ProductController(
             "sku" to product.sku,
             "quantity" to product.quantity,
             "description" to product.description,
-            "custom_fields" to product.customFields,
+            "custom_fields" to productFieldsService.readCustomFields(product.id!!),
             "created_at" to product.createdAt?.toString(),
             "updated_at" to product.updatedAt?.toString()
         )

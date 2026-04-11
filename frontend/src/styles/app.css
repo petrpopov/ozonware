@@ -1042,6 +1042,32 @@ body {
   padding: 8px;
 }
 
+.channel-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+  margin-right: 6px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.channel-badge--fbs {
+  color: var(--color-warning);
+  background: color-mix(in oklch, var(--color-warning) 12%, transparent);
+  box-shadow: 0px 0px 0px 1px color-mix(in oklch, var(--color-warning) 35%, transparent);
+}
+
+.channel-badge--fbo {
+  color: var(--color-success);
+  background: color-mix(in oklch, var(--color-success) 12%, transparent);
+  box-shadow: 0px 0px 0px 1px color-mix(in oklch, var(--color-success) 35%, transparent);
+}
+
 .diff-badge {
   display: inline-flex;
   align-items: center;
@@ -1966,6 +1992,43 @@ body {
   gap: 8px;
   justify-content: flex-end;
   flex-wrap: wrap;
+}
+
+/* Dict tab */
+
+.dict-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0 0 10px;
+}
+
+.dict-system-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-border);
+  vertical-align: middle;
+}
+
+.input-sm {
+  height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.btn-sm {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 /* Danger zone */

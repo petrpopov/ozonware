@@ -6,6 +6,7 @@ import { useUiStore } from '../store/useUiStore.js';
 import OperationBuilder from '../components/OperationBuilder.jsx';
 import OperationsHistory from '../components/OperationsHistory.jsx';
 import Modal from '../components/Modal.jsx';
+import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
 
 function normalizeText(value) {
   return String(value ?? '').trim().toLowerCase();
@@ -207,7 +208,7 @@ export default function ReceiptPage() {
         productSKU: item.productSKU || item.sku || '',
         productImage: (() => {
           const product = (productsQuery.data || []).find((p) => Number(p.id) === Number(item.productId));
-          const field = (product?.custom_fields || []).find((f) => String(f.name || '').trim() === 'Фото OZON');
+          const field = (product?.custom_fields || []).find((f) => String(f.name || '').trim() === FIELD_NAME_OZON_PHOTO);
           return String(field?.value || '').trim();
         })(),
         quantity: Math.max(1, Number(item.quantity || 1))

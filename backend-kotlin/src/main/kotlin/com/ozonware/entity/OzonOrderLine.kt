@@ -5,6 +5,7 @@ import jakarta.persistence.*
 import org.hibernate.annotations.Type
 import java.math.BigDecimal
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 @Entity
 @Table(name = "ozon_order_lines")
@@ -94,13 +95,16 @@ data class OzonOrderLine(
     @Column(name = "matched_by")
     var matchedBy: String? = null,
 
+    @Column(name = "posting_id")
+    var postingId: Long? = null,
+
     @Type(JsonType::class)
     @Column(columnDefinition = "jsonb", nullable = false)
     var raw: Map<String, Any?> = emptyMap(),
 
     @Column(name = "created_at", nullable = false)
-    var createdAt: LocalDateTime = LocalDateTime.now(),
+    var createdAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC),
 
     @Column(name = "updated_at", nullable = false)
-    var updatedAt: LocalDateTime = LocalDateTime.now()
+    var updatedAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC)
 )

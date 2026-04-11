@@ -6,6 +6,7 @@ import { useUiStore } from '../store/useUiStore.js';
 import OperationBuilder from '../components/OperationBuilder.jsx';
 import OperationsHistory from '../components/OperationsHistory.jsx';
 import Modal from '../components/Modal.jsx';
+import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
 
 export default function WriteoffPage() {
   const queryClient = useQueryClient();
@@ -38,7 +39,7 @@ export default function WriteoffPage() {
   useRouteRefetch(correctionsQuery.refetch);
 
   const getPhoto = (product) => {
-    const field = (product?.custom_fields || []).find((f) => String(f.name || '').trim() === 'Фото OZON');
+    const field = (product?.custom_fields || []).find((f) => String(f.name || '').trim() === FIELD_NAME_OZON_PHOTO);
     return String(field?.value || '').trim();
   };
 

@@ -7,6 +7,7 @@ import { useUiStore } from '../store/useUiStore.js';
 import { EditIcon, TrashIcon } from '../components/Icons.jsx';
 import Modal from '../components/Modal.jsx';
 import Dropdown from '../components/Dropdown.jsx';
+import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
 
 const emptyForm = {
   id: null,
@@ -747,7 +748,7 @@ export default function ProductsPage() {
           <tbody>
             {pagedProducts.map((product) => {
               const fieldMap = new Map((product.custom_fields || []).map((f) => [f.name, f.value]));
-              const ozonPhoto = String(fieldMap.get('Фото OZON') || '');
+              const ozonPhoto = String(fieldMap.get(FIELD_NAME_OZON_PHOTO) || '');
               return (
                 <tr key={product.id}>
                   <td>

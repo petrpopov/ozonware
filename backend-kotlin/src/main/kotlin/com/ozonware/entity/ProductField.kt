@@ -31,6 +31,15 @@ data class ProductField(
     @Column(nullable = false)
     var position: Int = 0,
 
+    @Column(name = "type_code", length = 32)
+    var typeCode: String? = null,
+
+    @Column(name = "kind", length = 48)
+    var kind: String? = null,
+
+    @Column(name = "is_system", nullable = false)
+    var isSystem: Boolean = false,
+
     @Column(name = "created_at")
     var createdAt: LocalDateTime? = null,
 

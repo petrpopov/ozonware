@@ -4,6 +4,7 @@ import io.hypersistence.utils.hibernate.type.json.JsonType
 import jakarta.persistence.*
 import org.hibernate.annotations.Type
 import java.time.LocalDateTime
+import java.time.ZoneOffset
 
 @Entity
 @Table(name = "ozon_order_import_batches")
@@ -19,7 +20,7 @@ data class OzonOrderImportBatch(
     var fileName: String? = null,
 
     @Column(name = "imported_at", nullable = false)
-    var importedAt: LocalDateTime = LocalDateTime.now(),
+    var importedAt: LocalDateTime = LocalDateTime.now(ZoneOffset.UTC),
 
     @Column(name = "rows_total", nullable = false)
     var rowsTotal: Int = 0,

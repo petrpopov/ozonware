@@ -10,7 +10,8 @@ import org.springframework.transaction.annotation.Transactional
 
 @Service
 class ProductService(
-    private val productRepository: ProductRepository
+    private val productRepository: ProductRepository,
+    private val productFieldsService: ProductFieldsService
 ) {
 
     fun findAll(search: String? = null): List<Product> {
@@ -35,10 +36,11 @@ class ProductService(
                 name = name,
                 sku = sku,
                 quantity = quantity,
-                description = description,
-                customFields = customFields
+                description = description
             )
-            productRepository.save(product)
+            val saved = productRepository.save(product)
+            productFieldsService.syncFieldValues(saved.id!!, customFields)
+            saved
         } catch (e: DataIntegrityViolationException) {
             throw ConflictException("SKU already exists")
         }
@@ -58,8 +60,9 @@ class ProductService(
             product.sku = sku
             product.quantity = quantity
             product.description = description
-            product.customFields = customFields
-            productRepository.save(product)
+            val saved = productRepository.save(product)
+            productFieldsService.syncFieldValues(saved.id!!, customFields)
+            saved
         } catch (e: DataIntegrityViolationException) {
             throw ConflictException("SKU already exists")
         }
