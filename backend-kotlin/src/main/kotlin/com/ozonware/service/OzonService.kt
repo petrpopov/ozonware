@@ -749,9 +749,7 @@ class OzonService(
 
             val cache = productMatcher.buildLookupCache()
             val itemInputs = mutableListOf<RecordOperationCommand.ItemInput>()
-            val shortageAdjustments = mutableListOf<RecordOperationCommand.ShortageInput>()
             val notFoundErrors = mutableListOf<String>()
-            val mismatches = mutableListOf<Map<String, Any?>>()
 
             for (rawItem in dayItems) {
                 @Suppress("UNCHECKED_CAST")
@@ -762,8 +760,7 @@ class OzonService(
 
                 val dbItem = productMatcher.findProductByOzonSku(sku, offerId, cache)
                 if (dbItem == null) {
-                    notFoundErrors += "Товар не найден: OZN$sku"
-                    mismatches += mapOf("sku" to sku, "name" to (item["name"] ?: "Неизвестно"), "required" to requiredQty, "reason" to "Товар не найден в базе данных")
+                    notFoundErrors += "Товар не найден: $sku"
                     continue
                 }
 
@@ -773,15 +770,6 @@ class OzonService(
                     productName = dbItem.name,
                     productSku = dbItem.sku
                 )
-
-                if (dbItem.quantity < requiredQty) {
-                    log.warn("[FBS apply] день $dayStr — нехватка ${dbItem.sku}: на складе ${dbItem.quantity}, отгружено по FBS $requiredQty, создаётся коррекция")
-                    shortageAdjustments += RecordOperationCommand.ShortageInput(
-                        productId = dbItem.id!!,
-                        actualRemaining = 0,
-                        reason = "FBS: OZON отгружено $requiredQty шт, на складе было ${dbItem.quantity} шт"
-                    )
-                }
             }
 
             if (notFoundErrors.isNotEmpty()) {
@@ -800,8 +788,7 @@ class OzonService(
                 operationDate = LocalDate.parse(dayStr),
                 note = "OZON FBS от $dayStr",
                 items = itemInputs,
-                allowShortage = shortageAdjustments.isNotEmpty(),
-                shortageAdjustments = shortageAdjustments
+                autoCompensate = true
             )
 
             val opResult = if (existingOp != null) {
@@ -828,18 +815,27 @@ class OzonService(
                 resultEntry["notFound"] = notFoundErrors
                 resultEntry["notFoundCount"] = notFoundErrors.size
             }
+            @Suppress("UNCHECKED_CAST")
+            val compensations = opResult["compensations"] as? List<Map<String, Any?>>
+            if (!compensations.isNullOrEmpty()) {
+                resultEntry["compensations"] = compensations
+                resultEntry["compensationsCount"] = compensations.size
+                log.info("[FBS apply] день $dayStr — авто-компенсировано ${compensations.size} SKU с недостачей")
+            }
             results += resultEntry
         }
 
         val successCount = results.count { it["status"] in listOf("success", "replaced") }
         val errorCount = results.count { it["status"] == "error" }
+        val totalCompensations = results.sumOf { (it["compensationsCount"] as? Number)?.toInt() ?: 0 }
 
         return mapOf(
             "summary" to mapOf(
                 "total" to results.size,
                 "success" to successCount,
                 "errors" to errorCount,
-                "alreadyProcessed" to 0
+                "alreadyProcessed" to 0,
+                "compensations" to totalCompensations
             ),
             "details" to results
         )
@@ -1077,7 +1073,7 @@ class OzonService(
 
                     val dbItem = productMatcher.findProductByOzonSku(sku, offerId, cache)
                     if (dbItem == null) {
-                        notFoundErrors += "Товар не найден: OZN$sku"
+                        notFoundErrors += "Товар не найден: $sku"
                         mismatches += mapOf("sku" to sku, "name" to (item["name"] ?: "Неизвестно"), "required" to requiredQty, "reason" to "Товар не найден в базе данных")
                         continue
                     }

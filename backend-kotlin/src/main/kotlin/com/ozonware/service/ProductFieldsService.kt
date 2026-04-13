@@ -3,6 +3,8 @@ package com.ozonware.service
 import com.ozonware.entity.ProductField
 import com.ozonware.repository.ProductFieldRepository
 import com.ozonware.repository.ProductFieldValueRepository
+import jakarta.annotation.PostConstruct
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -15,6 +17,26 @@ class ProductFieldsService(
     private val productFieldRepository: ProductFieldRepository,
     private val productFieldValueRepository: ProductFieldValueRepository
 ) {
+    private val log = LoggerFactory.getLogger(ProductFieldsService::class.java)
+
+    /**
+     * На старте проверяет, что системные поля имеют корректный kind.
+     * Страхует от ситуации когда V10 миграция выполнилась до создания полей.
+     */
+    @PostConstruct
+    @Transactional
+    fun bootstrapSystemFieldKinds() {
+        val kindMap = mapOf("OZON" to "ozon_sku", "Артикул OZON" to "ozon_article", "Фото OZON" to "ozon_photo")
+        for ((name, kind) in kindMap) {
+            val field = productFieldRepository.findByName(name) ?: continue
+            if (field.kind != kind) {
+                field.kind = kind
+                field.isSystem = true
+                productFieldRepository.save(field)
+                log.info("[ProductFieldsService] bootstrap: поле '{}' → kind='{}'", name, kind)
+            }
+        }
+    }
 
     /** Ensure a system field with the given name exists; create if absent. */
     @Transactional

@@ -3,6 +3,7 @@ package com.ozonware.util
 import com.ozonware.entity.Product
 import com.ozonware.repository.ProductFieldValueRepository
 import com.ozonware.repository.ProductRepository
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
 @Component
@@ -10,6 +11,7 @@ class ProductMatcher(
     private val productRepository: ProductRepository,
     private val productFieldValueRepository: ProductFieldValueRepository
 ) {
+    private val log = LoggerFactory.getLogger(ProductMatcher::class.java)
 
     data class LookupCache(
         val byOffer: Map<String, Product>,
@@ -38,6 +40,7 @@ class ProductMatcher(
                 normalizeOzonSku(pfv.valueText!!) to product
             }.toMap()
 
+        log.info("[ProductMatcher] cache built: byOzonSku=${byOzonSku.size}, byOffer=${byOffer.size}, bySku=${bySku.size}")
         return LookupCache(byOffer, byOzonSku, bySku)
     }
 
@@ -55,6 +58,10 @@ class ProductMatcher(
 
         val offerCached = effectiveCache.byOffer[trimmedOffer.lowercase()]
         if (offerCached != null) return offerCached
+
+        // Fallback: offer_id совпадает с внутренним SKU товара
+        val bySkuOffer = effectiveCache.bySku[trimmedOffer.lowercase()]
+        if (bySkuOffer != null) return bySkuOffer
 
         // Fallback: markdown suffix _dm or _dm###
         val dmRegex = Regex("(_dm\\d*)$", RegexOption.IGNORE_CASE)

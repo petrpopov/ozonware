@@ -1540,6 +1540,15 @@ body {
   font-size: 13px;
 }
 
+.import-warning {
+  color: var(--color-warning, #d97706);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
 .receipt-import-preview {
   max-height: 44vh;
   overflow: auto;

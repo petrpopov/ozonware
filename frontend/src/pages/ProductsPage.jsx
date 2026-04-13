@@ -895,6 +895,7 @@ export default function ProductsPage() {
               value={form.quantity}
               onChange={(e) => setForm((s) => ({ ...s, quantity: e.target.value }))}
             />
+            <span className="field-error field-error-placeholder">&nbsp;</span>
           </label>
 
           {fields.map((field, idx) => {
