@@ -17,6 +17,9 @@ interface OperationItemRepository : JpaRepository<OperationItem, Long> {
     @Query("SELECT COUNT(DISTINCT i.operationId) FROM OperationItem i WHERE i.productId = :productId")
     fun countDistinctOperationsByProductId(@Param("productId") productId: Long): Long
 
+    @Query("SELECT i FROM OperationItem i WHERE i.productId = :productId ORDER BY i.operationId DESC")
+    fun findAllByProductId(@Param("productId") productId: Long): List<OperationItem>
+
     @Modifying
     @Query(
         value = "INSERT INTO operation_items " +

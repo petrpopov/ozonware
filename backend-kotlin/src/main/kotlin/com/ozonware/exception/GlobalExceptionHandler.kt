@@ -1,13 +1,17 @@
 package com.ozonware.exception
 
+import org.slf4j.LoggerFactory
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
+import org.springframework.http.MediaType
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import jakarta.servlet.http.HttpServletRequest
 
 @RestControllerAdvice
 class GlobalExceptionHandler {
+    private val log = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
 
     @ExceptionHandler(ResourceNotFoundException::class)
     fun handleNotFound(ex: ResourceNotFoundException): ResponseEntity<Map<String, String>> {
@@ -32,8 +36,14 @@ class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception::class)
-    fun handleGeneric(ex: Exception): ResponseEntity<Map<String, String>> {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(mapOf("error" to ex.message!!))
+    fun handleGeneric(ex: Exception, request: HttpServletRequest): ResponseEntity<Map<String, String>>? {
+        val accept = request.getHeader("Accept") ?: ""
+        if (accept.contains(MediaType.TEXT_EVENT_STREAM_VALUE)) {
+            log.error("Exception in SSE endpoint [${request.requestURI}]", ex)
+            return null
+        }
+        log.error("Unhandled exception [${request.requestURI}]", ex)
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(mapOf("error" to (ex.message ?: "Internal server error")))
     }
 }
 

@@ -86,7 +86,7 @@ export default function OperationsHistory({
         reason: item.reason || '',
         note:
           item.note ||
-          (Number.isFinite(Number(item.delta))
+          (selectedOperation.type_code === 'correction' && Number.isFinite(Number(item.delta))
             ? Number(item.delta) < 0
               ? `Списать: ${Math.abs(Number(item.delta))} · Факт: н/д`
               : `Добавить: ${Math.abs(Number(item.delta))} · Факт: н/д`
@@ -282,7 +282,7 @@ export default function OperationsHistory({
         open={selectedOperationId !== null}
         onClose={() => setSelectedOperationId(null)}
         title={`Операция #${selectedOperationId ?? ''}`}
-        size="md"
+        size="lg"
         footer={
           <button className="btn-cancel" type="button" onClick={() => setSelectedOperationId(null)}>
             Закрыть

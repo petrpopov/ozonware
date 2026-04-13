@@ -24,6 +24,7 @@ class ProductService(
         }
     }
 
+    @Transactional
     fun createProduct(
         name: String,
         sku: String,
@@ -46,6 +47,7 @@ class ProductService(
         }
     }
 
+    @Transactional
     fun updateProduct(
         id: Long,
         name: String,
@@ -68,6 +70,7 @@ class ProductService(
         }
     }
 
+    @Transactional
     fun deleteProduct(id: Long) {
         val operationsCount = productRepository.countOperationsForProduct(id)
         if (operationsCount > 0) {

@@ -15,6 +15,7 @@ import com.ozonware.repository.WriteoffRepository
 import com.ozonware.repository.lookup.CorrectionReasonRepository
 import com.ozonware.repository.lookup.WriteoffReasonRepository
 import jakarta.persistence.EntityManager
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -73,6 +74,10 @@ class OperationsWriterService(
     private val ozonFboSupplyRepository: OzonFboSupplyRepository,
     private val entityManager: EntityManager
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(OperationsWriterService::class.java)
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
 
     @Transactional(rollbackFor = [Exception::class])
@@ -374,8 +379,15 @@ class OperationsWriterService(
     private fun applyDelta(productId: Long, delta: Int) {
         if (delta == 0) return
         entityManager.createNativeQuery(
-            "UPDATE products SET quantity = GREATEST(0, quantity + ?), updated_at = NOW() WHERE id = ?"
+            "UPDATE products SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?"
         ).setParameter(1, delta).setParameter(2, productId).executeUpdate()
+        // Warn on negative — should not happen with correct data, but is recoverable
+        val newQty = entityManager.createNativeQuery(
+            "SELECT quantity FROM products WHERE id = ?"
+        ).setParameter(1, productId).singleResult as Int
+        if (newQty < 0) {
+            log.warn("[applyDelta] product $productId quantity went negative: $newQty (delta=$delta)")
+        }
     }
 
     private fun simpleDelta(typeCode: String, qty: Int) = when (typeCode) {

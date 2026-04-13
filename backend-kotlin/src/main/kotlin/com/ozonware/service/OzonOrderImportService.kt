@@ -5,6 +5,9 @@ import com.ozonware.entity.OzonOrderImportBatch
 import com.ozonware.entity.OzonOrderLine
 import com.ozonware.exception.BadRequestException
 import com.ozonware.exception.ResourceNotFoundException
+import com.ozonware.repository.OperationInventoryDiffRepository
+import com.ozonware.repository.OperationItemRepository
+import com.ozonware.repository.OperationRepository
 import com.ozonware.repository.OzonOrderImportBatchRepository
 import com.ozonware.repository.OzonOrderLineRepository
 import com.ozonware.repository.OzonPostingRepository
@@ -25,6 +28,9 @@ class OzonOrderImportService(
     private val ozonPostingRepository: OzonPostingRepository,
     private val productRepository: ProductRepository,
     private val productMatcher: ProductMatcher,
+    private val operationRepository: OperationRepository,
+    private val operationItemRepository: OperationItemRepository,
+    private val operationInventoryDiffRepository: OperationInventoryDiffRepository,
     private val entityManager: EntityManager,
     private val objectMapper: ObjectMapper
 ) {
@@ -221,14 +227,57 @@ class OzonOrderImportService(
         }
     }
 
-    fun getProductStats(productId: Long): Map<String, Any> {
+    fun getProductStats(productId: Long): Map<String, Any?> {
         val product = productRepository.findById(productId)
             .orElseThrow { ResourceNotFoundException("Product not found") }
 
-        // Get order lines
         val orderLines = orderLineRepository.findAllByProductId(productId)
-
         val orderStats = buildOrderStats(orderLines)
+
+        // Warehouse stats from normalized operation_items / operation_inventory_diffs
+        val opItems = operationItemRepository.findAllByProductId(productId)
+        val invDiffs = operationInventoryDiffRepository.findAllByProductId(productId)
+
+        // Batch-load operations to get type/date
+        val opIds = (opItems.map { it.operationId } + invDiffs.map { it.operationId }).distinct()
+        val opsById = if (opIds.isEmpty()) emptyMap() else
+            operationRepository.findAllById(opIds).associateBy { it.id!! }
+
+        var receiptsQty = 0
+        var shipmentsQty = 0
+        var writeoffsQty = 0
+        var correctionsQty = 0L
+        var lastMovementAt: String? = null
+
+        for (item in opItems) {
+            val op = opsById[item.operationId] ?: continue
+            val dt = (op.operationDate?.toString()) ?: op.createdAt?.toString()
+            if (dt != null && (lastMovementAt == null || dt > lastMovementAt)) lastMovementAt = dt
+            val delta = item.delta?.toLong() ?: 0L
+            when (op.typeCode) {
+                "receipt"    -> receiptsQty += delta.toInt()
+                "shipment"   -> shipmentsQty += (-delta).toInt()
+                "writeoff"   -> writeoffsQty += (-delta).toInt()
+                "correction" -> correctionsQty += delta
+            }
+        }
+
+        var inventoryDiffQty = 0L
+        for (diff in invDiffs) {
+            val op = opsById[diff.operationId] ?: continue
+            val dt = (op.operationDate?.toString()) ?: op.createdAt?.toString()
+            if (dt != null && (lastMovementAt == null || dt > lastMovementAt)) lastMovementAt = dt
+            inventoryDiffQty += (diff.actual - diff.expected).toLong()
+        }
+
+        val warehouseStats = mapOf(
+            "receipts_qty" to receiptsQty,
+            "shipments_qty" to shipmentsQty,
+            "writeoffs_qty" to writeoffsQty,
+            "corrections_qty" to correctionsQty,
+            "inventory_diff_qty" to inventoryDiffQty,
+            "last_movement_at" to lastMovementAt
+        )
 
         return mapOf(
             "product" to mapOf(
@@ -237,7 +286,7 @@ class OzonOrderImportService(
                 "sku" to product.sku,
                 "quantity" to product.quantity
             ),
-            "warehouse" to emptyMap<String, Any>(),
+            "warehouse" to warehouseStats,
             "orders" to orderStats
         )
     }
@@ -245,8 +294,17 @@ class OzonOrderImportService(
     fun getProductTimeline(productId: Long, limit: String? = null, offset: String? = null, all: Boolean = false): Map<String, Any?> {
         val orderLines = orderLineRepository.findAllByProductId(productId)
 
-        val movements = orderLines.map { row ->
-            mapOf<String, Any?>(
+        // Warehouse movements from operation_items
+        val opItems = operationItemRepository.findAllByProductId(productId)
+        val invDiffs = operationInventoryDiffRepository.findAllByProductId(productId)
+        val opIds = (opItems.map { it.operationId } + invDiffs.map { it.operationId }).distinct()
+        val opsById = if (opIds.isEmpty()) emptyMap() else
+            operationRepository.findAllById(opIds).associateBy { it.id!! }
+
+        val movements = mutableListOf<Map<String, Any?>>()
+
+        for (row in orderLines) {
+            movements += mapOf<String, Any?>(
                 "kind" to "ozon_order",
                 "event_type" to "order",
                 "event_time" to (row.acceptedAt ?: row.shipmentDate ?: row.transferAt ?: row.deliveryDate)?.toString(),
@@ -261,7 +319,45 @@ class OzonOrderImportService(
                 "offer_id" to row.offerId,
                 "ozon_sku" to row.ozonSku
             )
-        }.toMutableList()
+        }
+
+        for (item in opItems) {
+            val op = opsById[item.operationId] ?: continue
+            val delta = item.delta?.toLong() ?: 0L
+            if (delta == 0L) continue
+            val eventTime = (op.operationDate?.toString()) ?: op.createdAt?.toString()
+            movements += mapOf<String, Any?>(
+                "kind" to "warehouse",
+                "event_type" to op.typeCode,
+                "event_time" to eventTime,
+                "operation_id" to op.id,
+                "channel_code" to op.channelCode,
+                "note" to op.note,
+                "qty_change" to delta,
+                "product_name_snapshot" to item.productNameSnapshot,
+                "product_sku_snapshot" to item.productSkuSnapshot
+            )
+        }
+
+        for (diff in invDiffs) {
+            val op = opsById[diff.operationId] ?: continue
+            val diffVal = diff.actual - diff.expected
+            if (diffVal.toLong() == 0L) continue
+            val eventTime = (op.operationDate?.toString()) ?: op.createdAt?.toString()
+            movements += mapOf<String, Any?>(
+                "kind" to "warehouse",
+                "event_type" to "inventory",
+                "event_time" to eventTime,
+                "operation_id" to op.id,
+                "channel_code" to op.channelCode,
+                "note" to op.note,
+                "qty_change" to diffVal.toLong(),
+                "expected" to diff.expected,
+                "actual" to diff.actual,
+                "product_name_snapshot" to diff.productNameSnapshot,
+                "product_sku_snapshot" to diff.productSkuSnapshot
+            )
+        }
 
         movements.sortByDescending { m -> m["event_time"]?.toString() ?: "" }
         val total = movements.size

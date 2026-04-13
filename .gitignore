@@ -19,3 +19,8 @@ frontend/dist/
 
 # IDE
 .idea/
+
+# Build and analysis artifacts
+graphify-out/
+source_data/
+.playwright-cli/

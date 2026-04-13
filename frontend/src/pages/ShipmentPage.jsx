@@ -460,7 +460,9 @@ export default function ShipmentPage() {
 
   const loadFbsStats = async () => {
     const data = await services.getOzonShipments();
-    setFbsStatsDays(Array.isArray(data) ? data : []);
+    const days = Array.isArray(data) ? data : [];
+    setFbsStatsDays(days);
+    return days;
   };
 
   const loadFboStats = async () => {
@@ -651,13 +653,24 @@ export default function ShipmentPage() {
       }
     };
 
-    source.onerror = () => {
+    source.onerror = async () => {
       if (fbsSourceRef.current) {
         fbsSourceRef.current.close();
         fbsSourceRef.current = null;
       }
       setFbsSyncRunning(false);
-      setFbsSyncCompleted(false);
+      // SSE connection may close before "complete" event even if data was saved.
+      // Try loading stats — if data exists, treat sync as completed.
+      try {
+        const stats = await loadFbsStats();
+        if (stats && stats.length > 0) {
+          setFbsSyncCompleted(true);
+        } else {
+          setFbsSyncCompleted(false);
+        }
+      } catch {
+        setFbsSyncCompleted(false);
+      }
     };
   };
 

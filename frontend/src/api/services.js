@@ -10,6 +10,7 @@ export const services = {
 
   getProductFields: () => api.get('/product-fields'),
   createProductField: (payload) => api.post('/product-fields', payload),
+  updateProductField: (id, payload) => api.put(`/product-fields/${id}`, payload),
   deleteProductField: (id) => api.del(`/product-fields/${id}`),
 
   getOperations: ({ type, limit, offset, includeTotal, shipmentKind } = {}) => {

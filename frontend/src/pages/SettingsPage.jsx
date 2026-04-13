@@ -82,19 +82,31 @@ export default function SettingsPage() {
   const saveFieldsMutation = useMutation({
     mutationFn: async () => {
       const existing = await services.getProductFields();
+      const existingIds = new Set(existing.map((f) => f.id));
+      const newIds = new Set(fields.filter((f) => f.id).map((f) => f.id));
+
+      // Delete fields removed by the user
       for (const item of existing) {
-        await services.deleteProductField(item.id);
+        if (!newIds.has(item.id)) {
+          await services.deleteProductField(item.id);
+        }
       }
+
       for (let i = 0; i < fields.length; i += 1) {
         const field = fields[i];
-        await services.createProductField({
+        const payload = {
           name: field.name,
           type: field.type,
           required: field.required,
           show_in_table: field.showInTable !== false,
           options: (field.options || []).filter((opt) => String(opt).trim() !== ''),
           position: i
-        });
+        };
+        if (field.id && existingIds.has(field.id)) {
+          await services.updateProductField(field.id, payload);
+        } else {
+          await services.createProductField(payload);
+        }
       }
     },
     onSuccess: () => {
