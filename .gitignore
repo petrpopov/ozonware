@@ -6,7 +6,6 @@ npm-debug.log
 
 # Database data and backups
 postgres_data/
-postgres-data/
 backup/
 database/backups/
 database/backup_*.sql
@@ -19,3 +18,8 @@ frontend/dist/
 
 # IDE
 .idea/
+
+# Build and analysis artifacts
+graphify-out/
+source_data/
+.playwright-cli/

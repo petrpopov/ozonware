@@ -5,12 +5,14 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.databind.node.ArrayNode
 import com.fasterxml.jackson.databind.node.ObjectNode
 import com.ozonware.config.OzonProperties
+import com.ozonware.entity.OperationItem
 import com.ozonware.entity.OzonFboSupply
 import com.ozonware.entity.OzonFboSupplyItem
 import com.ozonware.entity.OzonPosting
 import com.ozonware.entity.OzonPostingItem
 import com.ozonware.entity.Product
 import com.ozonware.exception.BadRequestException
+import com.ozonware.repository.OperationItemRepository
 import com.ozonware.repository.OzonFboSupplyItemRepository
 import com.ozonware.repository.OzonFboSupplyRepository
 import com.ozonware.repository.OzonPostingItemRepository
@@ -31,16 +33,19 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
+import org.springframework.transaction.support.TransactionTemplate
 
 @Service
 class OzonService(
     private val productRepository: ProductRepository,
     private val operationRepository: OperationRepository,
+    private val operationItemRepository: OperationItemRepository,
     private val operationsWriterService: OperationsWriterService,
     private val ozonPostingRepository: OzonPostingRepository,
     private val ozonPostingItemRepository: OzonPostingItemRepository,
@@ -51,7 +56,8 @@ class OzonService(
     private val productFieldsService: ProductFieldsService,
     private val ozonProperties: OzonProperties,
     private val entityManager: EntityManager,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val transactionTemplate: TransactionTemplate
 ) {
 
     private val log = LoggerFactory.getLogger(OzonService::class.java)
@@ -152,9 +158,9 @@ class OzonService(
                 ?: throw BadRequestException("OZON API Key not configured")
 
             val syncStartDateStr = settings["syncStartDate"]?.asText()
-            val syncBaseDate = syncStartDateStr?.let {
-                try { LocalDate.parse(it).atStartOfDay() } catch (_: Exception) { LocalDateTime.now() }
-            } ?: LocalDateTime.now()
+            val syncBaseDate = syncStartDateStr?.takeIf { it.isNotBlank() }?.let {
+                try { LocalDate.parse(it).atStartOfDay() } catch (_: Exception) { LocalDate.now(ZoneOffset.UTC).minusYears(1).atStartOfDay() }
+            } ?: LocalDate.now(ZoneOffset.UTC).minusYears(1).atStartOfDay()
 
             val syncDate = syncBaseDate.atZone(ZoneId.of("UTC"))
             val sinceParts = getMoscowYmdParts(syncDate)
@@ -222,11 +228,13 @@ class OzonService(
 
             var savedCount = 0
             for (posting in validPostings) {
-                val postingId = upsertPosting(posting)
-                savePostingItems(postingId, posting.get("products"))
+                transactionTemplate.executeWithoutResult {
+                    val postingId = upsertPosting(posting)
+                    savePostingItems(postingId, posting.get("products"))
+                }
                 savedCount++
 
-                if (savedCount % 10 == 0) {
+                if (savedCount % 50 == 0) {
                     sendFbsProgress("saving", "Сохранено $savedCount из ${validPostings.size}...")
                 }
             }
@@ -260,9 +268,10 @@ class OzonService(
             if (status !in validStatuses) return@filter false
 
             if (status == "canceled" || status == "cancelled") {
-                val cancelledAfterShip = p["cancellation"]?.get("cancelled_after_ship")?.asBoolean() ?: false
-                val hasDeliveringDate = p["delivering_date"]?.asText()?.isNotEmpty() ?: false
-                return@filter cancelledAfterShip || hasDeliveringDate
+                // Учитываем только те отменённые отправления, которые были фактически переданы
+                // в доставку до отмены. Источник правды — cancelled_after_ship из API.
+                // delivering_date — плановая дата доставки покупателю, не дата передачи в доставку.
+                return@filter p["cancellation"]?.get("cancelled_after_ship")?.asBoolean() ?: false
             }
             true
         }
@@ -286,7 +295,7 @@ class OzonService(
             val p = existing.get()
             p.status = status
             p.rawData = objectMapper.convertValue(posting, Map::class.java) as Map<String, Any?>
-            p.updatedAt = LocalDateTime.now()
+            p.updatedAt = LocalDateTime.now(ZoneOffset.UTC)
             ozonPostingRepository.save(p).id!!
         } else {
             val p = OzonPosting(
@@ -363,13 +372,21 @@ class OzonService(
             for (supply in supplies) {
                 if (fboCancelRequested.get()) throw CanceledException("FBO sync canceled by user")
 
-                val supplyDbId = upsertFboSupply(supply)
+                val bundleId = supply["bundle_id"] as String
+                val bundleItems = fetchFboBundleItems(bundleId, clientId, apiKey)
+                transactionTemplate.executeWithoutResult {
+                    val supplyDbId = upsertFboSupply(supply)
+                    saveFboSupplyItems(supplyDbId, bundleItems)
+                }
                 saved++
+                totalItems += bundleItems.size
 
-                sendFboProgress("saving", "FBO: сохранено $saved/${supplies.size}")
+                if (saved % 10 == 0) {
+                    sendFboProgress("saving", "FBO: сохранено $saved/${supplies.size}")
+                }
             }
 
-            sendFboProgress("complete", "FBO синхронизация завершена: поставок $saved")
+            sendFboProgress("complete", "FBO синхронизация завершена: поставок $saved, позиций $totalItems")
             sendFboComplete(mapOf("supplies" to saved, "bundles" to supplies.size, "items" to totalItems))
 
         } catch (e: CanceledException) {
@@ -470,8 +487,8 @@ class OzonService(
                     "warehouse_id" to warehouse?.get("warehouse_id")?.asLong(),
                     "warehouse_name" to warehouse?.get("name")?.asText(),
                     "warehouse_address" to warehouse?.get("address")?.asText(),
-                    "raw_order" to order,
-                    "raw_supply" to supply
+                    "raw_order" to objectMapper.convertValue(order, Map::class.java) as Map<String, Any?>,
+                    "raw_supply" to objectMapper.convertValue(supply, Map::class.java) as Map<String, Any?>
                 )
             }
         }
@@ -496,7 +513,7 @@ class OzonService(
             s.warehouseAddress = supply["warehouse_address"] as? String
             s.rawOrder = supply["raw_order"]?.let { @Suppress("UNCHECKED_CAST") it as Map<String, Any?> } ?: emptyMap()
             s.rawSupply = supply["raw_supply"]?.let { @Suppress("UNCHECKED_CAST") it as Map<String, Any?> } ?: emptyMap()
-            s.updatedAt = LocalDateTime.now()
+            s.updatedAt = LocalDateTime.now(ZoneOffset.UTC)
             ozonFboSupplyRepository.save(s).id!!
         } else {
             val s = OzonFboSupply(
@@ -518,9 +535,67 @@ class OzonService(
         }
     }
 
+    private fun fetchFboBundleItems(bundleId: String, clientId: String, apiKey: String): List<JsonNode> {
+        var lastId = ""
+        var hasNext = true
+        val items = mutableListOf<JsonNode>()
+        var page = 0
+
+        while (hasNext) {
+            if (fboCancelRequested.get()) throw CanceledException("FBO sync canceled by user")
+            page++
+
+            val body = mutableMapOf<String, Any>(
+                "bundle_ids" to listOf(bundleId),
+                "is_asc" to true,
+                "limit" to 100
+            )
+            if (lastId.isNotEmpty()) body["last_id"] = lastId
+
+            val data = makeRequestByUrl(ozonProperties.fboBundleUrl, clientId, apiKey, body, fboCancelRequested)
+            val payload = data["result"] ?: data
+            val part = payload["items"] ?: objectMapper.createArrayNode()
+
+            for (i in 0 until part.size()) {
+                items.add(part[i])
+            }
+
+            hasNext = payload["has_next"]?.asBoolean() ?: false
+            lastId = payload["last_id"]?.asText() ?: ""
+
+            sendFboProgress("loading", "FBO bundle $bundleId: стр. $page, товаров ${items.size}")
+        }
+
+        return items
+    }
+
+    fun saveFboSupplyItems(supplyDbId: Long, items: List<JsonNode>) {
+        ozonFboSupplyItemRepository.deleteBySupplyId(supplyDbId)
+        val cache = productMatcher.buildLookupCache()
+
+        for (item in items) {
+            val sku = item["sku"]?.asText() ?: ""
+            val offerId = item["offer_id"]?.asText()
+            val dbProduct = productMatcher.findProductByOzonSku(sku, offerId, cache)
+
+            val supplyItem = OzonFboSupplyItem(
+                supplyId = supplyDbId,
+                ozonSku = sku,
+                productId = dbProduct?.id,
+                quantity = item["quantity"]?.asInt() ?: 0,
+                productName = item["name"]?.asText(),
+                offerId = offerId,
+                iconPath = item["icon_path"]?.asText(),
+                rawItem = objectMapper.convertValue(item, Map::class.java) as Map<String, Any>
+            )
+            ozonFboSupplyItemRepository.save(supplyItem)
+        }
+    }
+
     // ── SSE helpers ──
 
     private fun sendFbsProgress(status: String, message: String) {
+        log.info("[FBS] $message")
         try {
             fbsEmitter?.send(
                 SseEmitter.event().data(mapOf("status" to status, "message" to message))
@@ -532,12 +607,12 @@ class OzonService(
     private fun sendFbsComplete(result: Map<String, Any>) {
         try {
             fbsEmitter?.send(SseEmitter.event().data(mapOf("status" to "complete", "result" to result)))
-            fbsEmitter?.complete()
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) {}
+        try { fbsEmitter?.complete() } catch (_: Exception) {}
     }
 
     private fun sendFboProgress(status: String, message: String) {
+        log.info("[FBO] $message")
         try {
             fboEmitter?.send(
                 SseEmitter.event().data(mapOf("status" to status, "message" to message))
@@ -549,9 +624,8 @@ class OzonService(
     private fun sendFboComplete(result: Map<String, Any>) {
         try {
             fboEmitter?.send(SseEmitter.event().data(mapOf("status" to "complete", "result" to result)))
-            fboEmitter?.complete()
-        } catch (_: Exception) {
-        }
+        } catch (_: Exception) {}
+        try { fboEmitter?.complete() } catch (_: Exception) {}
     }
 
     // ── Sync product images ──
@@ -675,7 +749,7 @@ class OzonService(
 
             val cache = productMatcher.buildLookupCache()
             val itemInputs = mutableListOf<RecordOperationCommand.ItemInput>()
-            val errors = mutableListOf<String>()
+            val notFoundErrors = mutableListOf<String>()
 
             for (rawItem in dayItems) {
                 @Suppress("UNCHECKED_CAST")
@@ -686,7 +760,7 @@ class OzonService(
 
                 val dbItem = productMatcher.findProductByOzonSku(sku, offerId, cache)
                 if (dbItem == null) {
-                    errors += "Товар не найден: OZN$sku"
+                    notFoundErrors += "Товар не найден: $sku"
                     continue
                 }
 
@@ -698,13 +772,13 @@ class OzonService(
                 )
             }
 
-            if (errors.isNotEmpty()) {
-                results += mapOf("day" to dayStr, "status" to "error", "errorCount" to errors.size, "errors" to errors)
-                continue
+            if (notFoundErrors.isNotEmpty()) {
+                log.warn("[FBS apply] день $dayStr — товары не найдены (пропускаются): ${notFoundErrors.joinToString("; ")}")
             }
 
             if (itemInputs.isEmpty()) {
-                results += mapOf("day" to dayStr, "status" to "error", "error" to "Нет товаров для отгрузки")
+                log.warn("[FBS apply] день $dayStr — нет товаров для отгрузки")
+                results += mapOf("day" to dayStr, "status" to "error", "error" to "Нет товаров для отгрузки", "notFound" to notFoundErrors)
                 continue
             }
 
@@ -713,7 +787,8 @@ class OzonService(
                 channelCode = "ozon_fbs",
                 operationDate = LocalDate.parse(dayStr),
                 note = "OZON FBS от $dayStr",
-                items = itemInputs
+                items = itemInputs,
+                autoCompensate = true
             )
 
             val opResult = if (existingOp != null) {
@@ -729,30 +804,44 @@ class OzonService(
                    WHERE (in_process_at AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')::date = ?::date"""
             ).setParameter(1, operationId).setParameter(2, dayStr).executeUpdate()
 
-            results += mapOf(
+            val resultEntry = mutableMapOf<String, Any?>(
                 "day" to dayStr,
                 "status" to if (existingOp != null) "replaced" else "success",
                 "operationId" to operationId,
                 "itemsCount" to itemInputs.size,
                 "totalQuantity" to itemInputs.sumOf { it.quantity }
             )
+            if (notFoundErrors.isNotEmpty()) {
+                resultEntry["notFound"] = notFoundErrors
+                resultEntry["notFoundCount"] = notFoundErrors.size
+            }
+            @Suppress("UNCHECKED_CAST")
+            val compensations = opResult["compensations"] as? List<Map<String, Any?>>
+            if (!compensations.isNullOrEmpty()) {
+                resultEntry["compensations"] = compensations
+                resultEntry["compensationsCount"] = compensations.size
+                log.info("[FBS apply] день $dayStr — авто-компенсировано ${compensations.size} SKU с недостачей")
+            }
+            results += resultEntry
         }
 
         val successCount = results.count { it["status"] in listOf("success", "replaced") }
         val errorCount = results.count { it["status"] == "error" }
+        val totalCompensations = results.sumOf { (it["compensationsCount"] as? Number)?.toInt() ?: 0 }
 
         return mapOf(
             "summary" to mapOf(
                 "total" to results.size,
                 "success" to successCount,
                 "errors" to errorCount,
-                "alreadyProcessed" to 0
+                "alreadyProcessed" to 0,
+                "compensations" to totalCompensations
             ),
             "details" to results
         )
     }
 
-    private fun loadDailyStats(): List<Map<String, Any?>> {
+    fun loadDailyStats(): List<Map<String, Any?>> {
         val ordersData = entityManager.createNativeQuery(
             """SELECT op.id, op.posting_number, op.status,
                   (op.in_process_at AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')::date AS day,
@@ -856,6 +945,415 @@ class OzonService(
         }
 
         return groupedByDay
+    }
+
+    fun loadFboDailyStats(): List<Map<String, Any?>> {
+        val supplies = ozonFboSupplyRepository.findAll()
+        if (supplies.isEmpty()) return emptyList()
+
+        val supplyItems = ozonFboSupplyItemRepository.findAll()
+            .groupBy { it.supplyId }
+
+        val dayMap = mutableMapOf<String, MutableMap<String, Any?>>()
+        val grouped = mutableListOf<MutableMap<String, Any?>>()
+
+        for (supply in supplies.sortedByDescending { supply ->
+            supply.arrivalDate ?: supply.orderCreatedDate
+        }) {
+            val day = (supply.arrivalDate ?: supply.orderCreatedDate)?.toLocalDate()?.toString() ?: continue
+
+            val dayGroup = dayMap.getOrPut(day) {
+                val g = mutableMapOf<String, Any?>(
+                    "day" to day,
+                    "supplyCount" to 0,
+                    "skuCount" to 0,
+                    "itemsCount" to 0,
+                    "supplies" to mutableListOf<Map<String, Any?>>()
+                )
+                grouped += g
+                g
+            }
+
+            val items = (supplyItems[supply.id] ?: emptyList()).map { it ->
+                mapOf<String, Any?>(
+                    "sku" to it.ozonSku,
+                    "product_id" to it.productId,
+                    "quantity" to it.quantity,
+                    "name" to it.productName,
+                    "offer_id" to it.offerId,
+                    "icon_path" to it.iconPath
+                )
+            }
+            val itemCount = items.sumOf { (it["quantity"] as? Int) ?: 0 }
+
+            val supplyMap = mapOf<String, Any?>(
+                "id" to supply.id,
+                "order_id" to supply.orderId,
+                "order_number" to supply.orderNumber,
+                "state" to supply.state,
+                "bundle_id" to supply.bundleId,
+                "supply_id" to supply.supplyId,
+                "arrival_date" to supply.arrivalDate,
+                "order_created_date" to supply.orderCreatedDate,
+                "warehouse_name" to supply.warehouseName,
+                "warehouse_address" to supply.warehouseAddress,
+                "shipment_applied" to (supply.shipmentApplied ?: false),
+                "shipment_operation_id" to supply.shipmentOperationId,
+                "itemCount" to itemCount,
+                "items" to items
+            )
+
+            @Suppress("UNCHECKED_CAST")
+            (dayGroup["supplies"] as MutableList<Map<String, Any?>>) += supplyMap
+            dayGroup["supplyCount"] = (dayGroup["supplyCount"] as Int) + 1
+            dayGroup["itemsCount"] = (dayGroup["itemsCount"] as Int) + itemCount
+        }
+
+        for (dayGroup in grouped) {
+            @Suppress("UNCHECKED_CAST")
+            val allSupplies = dayGroup["supplies"] as List<Map<String, Any?>>
+            val skuSet = mutableSetOf<String>()
+            allSupplies.forEach { s ->
+                @Suppress("UNCHECKED_CAST")
+                (s["items"] as? List<Map<String, Any?>>)?.forEach { item ->
+                    val sku = item["sku"]?.toString()
+                    if (!sku.isNullOrEmpty()) skuSet.add(sku)
+                }
+            }
+            dayGroup["skuCount"] = skuSet.size
+        }
+
+        return grouped
+    }
+
+    @Transactional
+    fun createShipmentsFromFbo(selectedDays: List<String>? = null): Map<String, Any?> {
+        val groupedByDay = loadFboDailyStats()
+        val daysToProcess = if (selectedDays != null) groupedByDay.filter { it["day"] in selectedDays } else groupedByDay
+        val results = mutableListOf<Map<String, Any?>>()
+
+        for (day in daysToProcess) {
+            val dayStr = day["day"] as String
+            @Suppress("UNCHECKED_CAST")
+            val daySupplies = day["supplies"] as List<Map<String, Any?>>
+
+            for (supply in daySupplies) {
+                val supplyId = (supply["id"] as? Number)?.toLong() ?: continue
+                val bundleId = supply["bundle_id"] as? String ?: continue
+                val orderNumber = supply["order_number"] as? String
+                val shipmentApplied = supply["shipment_applied"] as? Boolean ?: false
+
+                if (shipmentApplied) {
+                    results += mapOf("day" to dayStr, "supplyId" to supplyId, "orderNumber" to orderNumber, "status" to "already_processed")
+                    continue
+                }
+
+                // Idempotency fallback: check shipmentOperationId on the supply record
+                // (handles cases where shipmentApplied flag was not saved after operation creation)
+                val supplyRecord = ozonFboSupplyRepository.findById(supplyId).orElse(null)
+                if (supplyRecord?.shipmentOperationId != null) {
+                    supplyRecord.shipmentApplied = true
+                    ozonFboSupplyRepository.save(supplyRecord)
+                    results += mapOf("day" to dayStr, "supplyId" to supplyId, "orderNumber" to orderNumber, "status" to "already_processed")
+                    continue
+                }
+
+                @Suppress("UNCHECKED_CAST")
+                val supplyItems = supply["items"] as? List<Map<String, Any?>> ?: emptyList()
+                val cache = productMatcher.buildLookupCache()
+                val itemInputs = mutableListOf<RecordOperationCommand.ItemInput>()
+                val shortageAdjustments = mutableListOf<RecordOperationCommand.ShortageInput>()
+                val notFoundErrors = mutableListOf<String>()
+                val mismatches = mutableListOf<Map<String, Any?>>()
+
+                for (item in supplyItems) {
+                    val sku = item["sku"]?.toString() ?: ""
+                    val offerId = item["offer_id"] as? String
+                    val requiredQty = (item["quantity"] as? Number)?.toInt() ?: 0
+
+                    val dbItem = productMatcher.findProductByOzonSku(sku, offerId, cache)
+                    if (dbItem == null) {
+                        notFoundErrors += "Товар не найден: $sku"
+                        mismatches += mapOf("sku" to sku, "name" to (item["name"] ?: "Неизвестно"), "required" to requiredQty, "reason" to "Товар не найден в базе данных")
+                        continue
+                    }
+
+                    itemInputs += RecordOperationCommand.ItemInput(
+                        productId = dbItem.id!!,
+                        quantity = requiredQty,
+                        productName = dbItem.name,
+                        productSku = dbItem.sku
+                    )
+
+                    if (dbItem.quantity < requiredQty) {
+                        // FBO — источник правды: применяем с автокоррекцией остатка до 0
+                        log.warn("[FBO apply] supply $bundleId ($dayStr) — нехватка ${dbItem.sku}: на складе ${dbItem.quantity}, отгружено по FBO $requiredQty, создаётся коррекция")
+                        shortageAdjustments += RecordOperationCommand.ShortageInput(
+                            productId = dbItem.id!!,
+                            actualRemaining = 0,
+                            reason = "FBO: OZON отгружено $requiredQty шт, на складе было ${dbItem.quantity} шт"
+                        )
+                    }
+                }
+
+                if (notFoundErrors.isNotEmpty()) {
+                    log.warn("[FBO apply] supply $bundleId ($dayStr) — товары не найдены (пропускаются): ${notFoundErrors.joinToString("; ")}")
+                }
+
+                if (itemInputs.isEmpty()) {
+                    log.warn("[FBO apply] supply $bundleId ($dayStr) — нет товаров для отгрузки")
+                    results += mapOf("day" to dayStr, "supplyId" to supplyId, "orderNumber" to orderNumber, "status" to "error", "error" to "Нет товаров для отгрузки")
+                    continue
+                }
+
+                val note = "OZON FBO от $dayStr #${orderNumber ?: ""} bundle $bundleId"
+                val cmd = RecordOperationCommand(
+                    typeCode = "shipment",
+                    channelCode = "ozon_fbo",
+                    operationDate = LocalDate.parse(dayStr),
+                    note = note,
+                    items = itemInputs,
+                    allowShortage = shortageAdjustments.isNotEmpty(),
+                    shortageAdjustments = shortageAdjustments
+                )
+
+                val opResult = operationsWriterService.recordOperation(cmd)
+                val operationId = (opResult["id"] as? Number)?.toLong() ?: 0L
+
+                val s = ozonFboSupplyRepository.findById(supplyId).orElse(null)
+                if (s != null) {
+                    s.shipmentApplied = true
+                    s.shipmentOperationId = operationId
+                    ozonFboSupplyRepository.save(s)
+                }
+
+                val resultEntry = mutableMapOf<String, Any?>(
+                    "day" to dayStr,
+                    "supplyId" to supplyId,
+                    "orderNumber" to orderNumber,
+                    "status" to "success",
+                    "operationId" to operationId,
+                    "itemsCount" to itemInputs.size,
+                    "totalQuantity" to itemInputs.sumOf { it.quantity }
+                )
+                if (notFoundErrors.isNotEmpty()) {
+                    resultEntry["notFound"] = notFoundErrors
+                    resultEntry["notFoundCount"] = notFoundErrors.size
+                }
+                results += resultEntry
+            }
+        }
+
+        val successCount = results.count { it["status"] == "success" }
+        val errorCount = results.count { it["status"] == "error" }
+        val alreadyCount = results.count { it["status"] == "already_processed" }
+
+        return mapOf(
+            "summary" to mapOf("total" to results.size, "success" to successCount, "errors" to errorCount, "alreadyProcessed" to alreadyCount),
+            "details" to results
+        )
+    }
+
+    @Transactional
+    fun createShipmentsFromFbsCsv(daysData: List<Map<String, Any?>>): Map<String, Any?> {
+        if (daysData.isEmpty()) {
+            return mapOf("summary" to mapOf("total" to 0, "success" to 0, "errors" to 0, "alreadyProcessed" to 0), "details" to emptyList<Any>())
+        }
+
+        val results = mutableListOf<Map<String, Any?>>()
+
+        for (dayData in daysData) {
+            val dayStr = dayData["day"]?.toString()?.take(10) ?: continue
+            @Suppress("UNCHECKED_CAST")
+            val sourceItems = dayData["items"] as? List<Map<String, Any?>> ?: emptyList()
+            if (dayStr.isBlank() || sourceItems.isEmpty()) {
+                results += mapOf("day" to dayStr, "status" to "error", "error" to "Некорректные данные дня")
+                continue
+            }
+
+            val existingOp = operationRepository.findByTypeCodeAndChannelCodeAndOperationDate(
+                "shipment", "ozon_fbs", LocalDate.parse(dayStr)
+            ).firstOrNull()
+
+            val cache = productMatcher.buildLookupCache()
+            val itemInputs = mutableListOf<RecordOperationCommand.ItemInput>()
+            val errors = mutableListOf<String>()
+            val mismatches = mutableListOf<Map<String, Any?>>()
+
+            for (item in sourceItems) {
+                val sku = item["sku"]?.toString() ?: ""
+                val offerId = item["offer_id"] as? String
+                val requiredQty = (item["quantity"] as? Number)?.toInt() ?: 0
+
+                val dbItem = productMatcher.findProductByOzonSku(sku, offerId, cache)
+                if (dbItem == null) {
+                    errors += "Товар не найден: $sku"
+                    mismatches += mapOf("sku" to sku, "name" to (item["name"] ?: "Неизвестно"), "required" to requiredQty, "reason" to "Товар не найден в базе данных")
+                    continue
+                }
+
+                // For CSV-based update: after rollback (done by updateOperation), actual available will be
+                // dbItem.quantity + previously_applied. We validate against current stock only on new ops.
+                if (existingOp == null && dbItem.quantity < requiredQty) {
+                    val shortage = requiredQty - dbItem.quantity
+                    errors += "Недостаточно товара ${dbItem.sku} (${dbItem.name}). На складе: ${dbItem.quantity}, требуется: $requiredQty"
+                    mismatches += mapOf("sku" to dbItem.sku, "name" to dbItem.name, "inStock" to dbItem.quantity, "required" to requiredQty, "shortage" to shortage, "reason" to "Недостаточно товара на складе")
+                    continue
+                }
+
+                itemInputs += RecordOperationCommand.ItemInput(
+                    productId = dbItem.id!!,
+                    quantity = requiredQty,
+                    productName = dbItem.name,
+                    productSku = dbItem.sku
+                )
+            }
+
+            if (errors.isNotEmpty()) {
+                results += mapOf("day" to dayStr, "status" to "error", "errorCount" to errors.size, "errors" to errors, "mismatches" to mismatches)
+                continue
+            }
+
+            if (itemInputs.isEmpty()) {
+                results += mapOf("day" to dayStr, "status" to "error", "error" to "Нет товаров для отгрузки")
+                continue
+            }
+
+            val cmd = RecordOperationCommand(
+                typeCode = "shipment",
+                channelCode = "ozon_fbs",
+                operationDate = LocalDate.parse(dayStr),
+                note = "OZON FBS от $dayStr",
+                items = itemInputs
+            )
+
+            val opResult = if (existingOp != null) {
+                operationsWriterService.updateOperation(existingOp.id!!, cmd)
+            } else {
+                operationsWriterService.recordOperation(cmd)
+            }
+
+            val operationId = (opResult["id"] as? Number)?.toLong() ?: 0L
+
+            entityManager.createNativeQuery(
+                """UPDATE ozon_postings SET shipped = true, shipment_applied = true, shipment_operation_id = ?, updated_at = NOW()
+                   WHERE (in_process_at AT TIME ZONE 'UTC' AT TIME ZONE 'Europe/Moscow')::date = ?::date"""
+            ).setParameter(1, operationId).setParameter(2, dayStr).executeUpdate()
+
+            results += mapOf(
+                "day" to dayStr,
+                "status" to if (existingOp != null) "replaced" else "success",
+                "operationId" to operationId,
+                "itemsCount" to itemInputs.size,
+                "totalQuantity" to itemInputs.sumOf { it.quantity }
+            )
+        }
+
+        val successCount = results.count { it["status"] in listOf("success", "replaced") }
+        val errorCount = results.count { it["status"] == "error" }
+
+        return mapOf(
+            "summary" to mapOf("total" to results.size, "success" to successCount, "errors" to errorCount, "alreadyProcessed" to 0),
+            "details" to results
+        )
+    }
+
+    fun analyzeFbsCsvDays(daysData: List<Map<String, Any?>>): Map<String, Any?> {
+        if (daysData.isEmpty()) {
+            return mapOf(
+                "summary" to mapOf("total" to 0, "unchanged" to 0, "new" to 0, "updated" to 0, "withIssues" to 0),
+                "details" to emptyList<Any>()
+            )
+        }
+
+        val cache = productMatcher.buildLookupCache()
+        val details = mutableListOf<Map<String, Any?>>()
+
+        for (dayData in daysData) {
+            val dayStr = dayData["day"]?.toString()?.take(10) ?: ""
+            @Suppress("UNCHECKED_CAST")
+            val sourceItems = dayData["items"] as? List<Map<String, Any?>> ?: emptyList()
+
+            if (dayStr.isBlank() || sourceItems.isEmpty()) {
+                details += mapOf("day" to dayStr.ifBlank { "—" }, "status" to "error", "statusLabel" to "Ошибка", "changed" to false, "note" to "Некорректные данные дня")
+                continue
+            }
+
+            val existingOp = operationRepository.findByTypeCodeAndChannelCodeAndOperationDate(
+                "shipment", "ozon_fbs", LocalDate.parse(dayStr)
+            ).firstOrNull()
+
+            val existingItems: List<OperationItem> = if (existingOp != null) operationItemRepository.findAllByOperationId(existingOp.id!!) else emptyList()
+            val existingMap: Map<Long, Int> = existingItems.associate { item -> item.productId to ((item.appliedQty ?: item.requestedQty).toLong().toInt()) }
+            val existingTotal: Int = existingMap.values.sumOf { qty -> qty }
+
+            val incomingMap = mutableMapOf<Long, Int>()
+            val unmatchedItems = mutableListOf<Map<String, Any?>>()
+            var incomingTotal = 0
+            var incomingMatchedTotal = 0
+
+            for (item in sourceItems) {
+                val qty = (item["quantity"] as? Number)?.toInt() ?: 0
+                if (qty <= 0) continue
+                incomingTotal += qty
+                val sku = item["sku"]?.toString() ?: ""
+                val offerId = item["offer_id"] as? String
+                val dbItem = productMatcher.findProductByOzonSku(sku, offerId, cache)
+                if (dbItem == null) {
+                    unmatchedItems += mapOf("sku" to sku, "offer_id" to (offerId ?: ""), "name" to (item["name"] ?: ""), "quantity" to qty)
+                    continue
+                }
+                incomingMatchedTotal += qty
+                incomingMap[dbItem.id!!] = (incomingMap[dbItem.id] ?: 0) + qty
+            }
+
+            val mapsEqual = incomingMap.size == existingMap.size && incomingMap.all { (k, v) -> existingMap[k] == v }
+
+            val status: String
+            val statusLabel: String
+            val changed: Boolean
+
+            if (existingOp == null) {
+                status = if (unmatchedItems.isEmpty()) "new" else "new_with_issues"
+                statusLabel = if (unmatchedItems.isEmpty()) "Новый день" else "Новый день (есть несопоставленные)"
+                changed = true
+            } else if (mapsEqual && unmatchedItems.isEmpty()) {
+                status = "unchanged"; statusLabel = "Без изменений"; changed = false
+            } else {
+                status = if (unmatchedItems.isEmpty()) "updated" else "updated_with_issues"
+                statusLabel = if (unmatchedItems.isEmpty()) "Будет обновлен" else "Будет обновлен (есть несопоставленные)"
+                changed = true
+            }
+
+            details += mapOf(
+                "day" to dayStr,
+                "status" to status,
+                "statusLabel" to statusLabel,
+                "changed" to changed,
+                "hasExisting" to (existingOp != null),
+                "existingOperationId" to existingOp?.id,
+                "existingTotal" to existingTotal,
+                "incomingTotal" to incomingTotal,
+                "incomingMatchedTotal" to incomingMatchedTotal,
+                "unmatchedCount" to unmatchedItems.size,
+                "unmatchedItems" to unmatchedItems
+            )
+        }
+
+        val summary = details.fold(mutableMapOf("total" to 0, "unchanged" to 0, "new" to 0, "updated" to 0, "withIssues" to 0)) { acc, item ->
+            acc["total"] = acc["total"]!! + 1
+            when {
+                item["status"] == "unchanged" -> acc["unchanged"] = acc["unchanged"]!! + 1
+                (item["status"] as? String)?.startsWith("new") == true -> acc["new"] = acc["new"]!! + 1
+                (item["status"] as? String)?.startsWith("updated") == true -> acc["updated"] = acc["updated"]!! + 1
+            }
+            if ((item["status"] as? String)?.contains("issues") == true || item["status"] == "error") {
+                acc["withIssues"] = acc["withIssues"]!! + 1
+            }
+            acc
+        }
+
+        return mapOf("summary" to summary, "details" to details)
     }
 
     private fun parseTimestamp(s: String): LocalDateTime? {

@@ -568,6 +568,8 @@ export default function ReceiptPage() {
                 <input
                   className="input"
                   type="date"
+                  min="2020-01-01"
+                  max="2099-12-31"
                   value={importDate}
                   onChange={(event) => setImportDate(event.target.value)}
                 />
@@ -624,12 +626,12 @@ export default function ReceiptPage() {
                   <strong>{importPreview.totals.skippedEmptySku}</strong> · Пропущено (невалидное количество):{' '}
                   <strong>{importPreview.totals.skippedInvalidQty}</strong>
                 </div>
-                <div className="table-wrap receipt-import-preview">
+                <div className="table-wrap import-preview-table">
                   <table className="table compact table-compact">
                     <thead>
                       <tr>
                         <th>SKU</th>
-                        <th>Количество в файле</th>
+                        <th>Количество</th>
                         <th>Товар в БД</th>
                         <th>Статус</th>
                       </tr>
@@ -683,6 +685,8 @@ export default function ReceiptPage() {
                 <input
                   className="input"
                   type="date"
+                  min="2020-01-01"
+                  max="2099-12-31"
                   value={editForm.operation_date}
                   onChange={(event) => setEditForm((prev) => ({ ...prev, operation_date: event.target.value }))}
                 />

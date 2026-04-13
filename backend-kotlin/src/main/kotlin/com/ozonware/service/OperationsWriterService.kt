@@ -15,6 +15,7 @@ import com.ozonware.repository.WriteoffRepository
 import com.ozonware.repository.lookup.CorrectionReasonRepository
 import com.ozonware.repository.lookup.WriteoffReasonRepository
 import jakarta.persistence.EntityManager
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -30,7 +31,9 @@ data class RecordOperationCommand(
     val items: List<ItemInput> = emptyList(),
     val diffs: List<DiffInput> = emptyList(),
     val allowShortage: Boolean = false,
-    val shortageAdjustments: List<ShortageInput> = emptyList()
+    val shortageAdjustments: List<ShortageInput> = emptyList(),
+    /** Если true — при нехватке автоматически компенсирует недостачу вместо 400 (только для FBS/FBO) */
+    val autoCompensate: Boolean = false
 ) {
     data class ItemInput(
         val productId: Long,
@@ -73,6 +76,10 @@ class OperationsWriterService(
     private val ozonFboSupplyRepository: OzonFboSupplyRepository,
     private val entityManager: EntityManager
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(OperationsWriterService::class.java)
+    }
+
     // ── Public API ────────────────────────────────────────────────────────────
 
     @Transactional(rollbackFor = [Exception::class])
@@ -172,8 +179,9 @@ class OperationsWriterService(
         ).setParameter(1, productIds.toTypedArray()).resultList as List<Array<Any?>>
         val productsMap = lockedRows.associateBy { (it[0] as Number).toLong() }
 
-        val preparedItems   = mutableListOf<Map<String, Any?>>()
-        val correctionDiffs = mutableListOf<Map<String, Any?>>()
+        val preparedItems    = mutableListOf<Map<String, Any?>>()
+        val correctionDiffs  = mutableListOf<Map<String, Any?>>()
+        val autoCompensations = mutableListOf<Map<String, Any?>>()
 
         for (input in cmd.items) {
             val prod = productsMap[input.productId]
@@ -186,11 +194,28 @@ class OperationsWriterService(
             val (newQty, applied, corrDiff) = if (reqQty <= avail) {
                 Triple(avail - reqQty, reqQty, null)
             } else {
-                if (!cmd.allowShortage) throw BadRequestException(
-                    "Недостаточно товара $sku ($name). На складе: $avail, требуется: $reqQty"
-                )
-                val adj = adjustmentMap[input.productId]
-                    ?: throw BadRequestException("Для товара $sku не заполнена корректировка")
+                // Получаем корректировку — либо переданную вручную, либо авто при autoCompensate
+                val adj = when {
+                    cmd.allowShortage -> adjustmentMap[input.productId]
+                        ?: throw BadRequestException("Для товара $sku не заполнена корректировка")
+                    cmd.autoCompensate -> {
+                        val shortfall = reqQty - avail
+                        log.warn("[recordShipment] autoCompensate: $sku на складе $avail, требуется $reqQty, недостача $shortfall шт")
+                        autoCompensations += mapOf(
+                            "productId" to input.productId, "sku" to sku, "name" to name,
+                            "qty" to shortfall,
+                            "reason" to "FBS: учёт меньше фактической отгрузки OZON на $shortfall шт"
+                        )
+                        RecordOperationCommand.ShortageInput(
+                            productId = input.productId,
+                            actualRemaining = 0,
+                            reason = "FBS: учёт меньше фактической отгрузки OZON на $shortfall шт"
+                        )
+                    }
+                    else -> throw BadRequestException(
+                        "Недостаточно товара $sku ($name). На складе: $avail, требуется: $reqQty"
+                    )
+                }
                 if (adj.actualRemaining < 0 || adj.actualRemaining > avail)
                     throw BadRequestException("Некорректный фактический остаток для $sku")
                 if (adj.reason.isBlank())
@@ -264,7 +289,10 @@ class OperationsWriterService(
             correctionOperationId = corrOp.id
         }
 
-        return buildResult(op).toMutableMap().also { it["correction_operation_id"] = correctionOperationId }
+        return buildResult(op).toMutableMap().also {
+            it["correction_operation_id"] = correctionOperationId
+            if (autoCompensations.isNotEmpty()) it["compensations"] = autoCompensations
+        }
     }
 
     private fun recordInventory(
@@ -374,8 +402,15 @@ class OperationsWriterService(
     private fun applyDelta(productId: Long, delta: Int) {
         if (delta == 0) return
         entityManager.createNativeQuery(
-            "UPDATE products SET quantity = GREATEST(0, quantity + ?), updated_at = NOW() WHERE id = ?"
+            "UPDATE products SET quantity = quantity + ?, updated_at = NOW() WHERE id = ?"
         ).setParameter(1, delta).setParameter(2, productId).executeUpdate()
+        // Warn on negative — should not happen with correct data, but is recoverable
+        val newQty = entityManager.createNativeQuery(
+            "SELECT quantity FROM products WHERE id = ?"
+        ).setParameter(1, productId).singleResult as Int
+        if (newQty < 0) {
+            log.warn("[applyDelta] product $productId quantity went negative: $newQty (delta=$delta)")
+        }
     }
 
     private fun simpleDelta(typeCode: String, qty: Int) = when (typeCode) {

@@ -2,6 +2,7 @@ package com.ozonware.controller
 
 import com.ozonware.service.OzonService
 import com.ozonware.service.SettingsService
+import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
@@ -12,6 +13,7 @@ class OzonController(
     private val ozonService: OzonService,
     private val settingsService: SettingsService
 ) {
+    private val log = LoggerFactory.getLogger(OzonController::class.java)
 
     @GetMapping("/settings")
     fun getSettings(): ResponseEntity<Any?> {
@@ -81,7 +83,7 @@ class OzonController(
     @GetMapping("/shipments")
     fun getShipments(): ResponseEntity<Any> {
         return try {
-            ResponseEntity.ok(emptyList<Map<String, Any>>())
+            ResponseEntity.ok(ozonService.loadDailyStats())
         } catch (e: Exception) {
             ResponseEntity.status(500).body(mapOf(
                 "error" to "Failed to fetch daily stats",
@@ -93,7 +95,7 @@ class OzonController(
     @GetMapping("/fbo/supplies")
     fun getFboSupplies(): ResponseEntity<Any> {
         return try {
-            ResponseEntity.ok(emptyList<Map<String, Any>>())
+            ResponseEntity.ok(ozonService.loadFboDailyStats())
         } catch (e: Exception) {
             ResponseEntity.status(500).body(mapOf(
                 "error" to "Failed to fetch FBO daily stats",
@@ -109,6 +111,7 @@ class OzonController(
             val result = ozonService.createShipments(days)
             ResponseEntity.ok(result)
         } catch (e: Exception) {
+            log.error("Failed to create FBS shipment", e)
             ResponseEntity.status(500).body(mapOf(
                 "error" to "Failed to create shipment",
                 "message" to e.message!!
@@ -117,10 +120,10 @@ class OzonController(
     }
 
     @PostMapping("/fbo/shipments")
-    fun createFboShipments(@RequestBody body: Map<String, Any?>?): ResponseEntity<Map<String, Any>> {
+    fun createFboShipments(@RequestBody body: Map<String, Any?>?): ResponseEntity<Map<String, Any?>> {
         return try {
             val days = body?.get("days") as? List<String>
-            ResponseEntity.ok(emptyMap())
+            ResponseEntity.ok(ozonService.createShipmentsFromFbo(days))
         } catch (e: Exception) {
             ResponseEntity.status(500).body(mapOf(
                 "error" to "Failed to create FBO shipments",
@@ -143,9 +146,11 @@ class OzonController(
     }
 
     @PostMapping("/fbs/shipments-from-csv")
-    fun createFbsShipmentsFromCsv(@RequestBody body: Map<String, Any?>?): ResponseEntity<Map<String, Any>> {
+    fun createFbsShipmentsFromCsv(@RequestBody body: Map<String, Any?>?): ResponseEntity<Map<String, Any?>> {
         return try {
-            ResponseEntity.ok(emptyMap())
+            @Suppress("UNCHECKED_CAST")
+            val daysData = body?.get("days") as? List<Map<String, Any?>> ?: emptyList()
+            ResponseEntity.ok(ozonService.createShipmentsFromFbsCsv(daysData))
         } catch (e: Exception) {
             ResponseEntity.status(500).body(mapOf(
                 "error" to "Failed to create FBS shipments from CSV",
@@ -155,9 +160,11 @@ class OzonController(
     }
 
     @PostMapping("/fbs/csv-analyze")
-    fun analyzeFbsCsv(@RequestBody body: Map<String, Any?>?): ResponseEntity<Map<String, Any>> {
+    fun analyzeFbsCsv(@RequestBody body: Map<String, Any?>?): ResponseEntity<Map<String, Any?>> {
         return try {
-            ResponseEntity.ok(emptyMap())
+            @Suppress("UNCHECKED_CAST")
+            val daysData = body?.get("days") as? List<Map<String, Any?>> ?: emptyList()
+            ResponseEntity.ok(ozonService.analyzeFbsCsvDays(daysData))
         } catch (e: Exception) {
             ResponseEntity.status(500).body(mapOf(
                 "error" to "Failed to analyze FBS CSV",

@@ -12,7 +12,7 @@ class ProductFieldService(
 ) {
 
     fun findAll(): List<ProductField> {
-        return productFieldRepository.findAll()
+        return productFieldRepository.findAllByOrderByPositionAsc()
     }
 
     fun createField(

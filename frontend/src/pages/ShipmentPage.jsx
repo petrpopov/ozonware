@@ -98,6 +98,7 @@ export default function ShipmentPage() {
   const [fbsCsvAnalysis, setFbsCsvAnalysis] = useState(null);
   const [fbsCsvAnalyzeLoading, setFbsCsvAnalyzeLoading] = useState(false);
   const [fbsCsvApplyReport, setFbsCsvApplyReport] = useState(null);
+  const [fbsApplyReport, setFbsApplyReport] = useState(null);
   const [expandedFbsDay, setExpandedFbsDay] = useState('');
   const [fboSyncRunning, setFboSyncRunning] = useState(false);
   const [fboSyncMessages, setFboSyncMessages] = useState([]);
@@ -239,11 +240,11 @@ export default function ShipmentPage() {
       queryClient.invalidateQueries({ queryKey: ['operations', 'shipment'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
       await loadFbsStats();
+      setFbsApplyReport(result || null);
       const summary = result?.summary || {};
-      pushToast(
-        `FBS применено: ${summary.success || 0}, ошибок: ${summary.errors || 0}`,
-        summary.errors ? 'error' : 'success'
-      );
+      const parts = [`FBS применено: ${summary.success || 0}, ошибок: ${summary.errors || 0}`];
+      if (summary.compensations) parts.push(`авто-компенсаций: ${summary.compensations}`);
+      pushToast(parts.join(' · '), summary.errors ? 'error' : summary.compensations ? 'warning' : 'success');
     },
     onError: (error) => pushToast(error.message, 'error')
   });
@@ -460,7 +461,9 @@ export default function ShipmentPage() {
 
   const loadFbsStats = async () => {
     const data = await services.getOzonShipments();
-    setFbsStatsDays(Array.isArray(data) ? data : []);
+    const days = Array.isArray(data) ? data : [];
+    setFbsStatsDays(days);
+    return days;
   };
 
   const loadFboStats = async () => {
@@ -651,13 +654,24 @@ export default function ShipmentPage() {
       }
     };
 
-    source.onerror = () => {
+    source.onerror = async () => {
       if (fbsSourceRef.current) {
         fbsSourceRef.current.close();
         fbsSourceRef.current = null;
       }
       setFbsSyncRunning(false);
-      setFbsSyncCompleted(false);
+      // SSE connection may close before "complete" event even if data was saved.
+      // Try loading stats — if data exists, treat sync as completed.
+      try {
+        const stats = await loadFbsStats();
+        if (stats && stats.length > 0) {
+          setFbsSyncCompleted(true);
+        } else {
+          setFbsSyncCompleted(false);
+        }
+      } catch {
+        setFbsSyncCompleted(false);
+      }
     };
   };
 
@@ -970,6 +984,25 @@ export default function ShipmentPage() {
                   </div>
                 )}
                 {fbsSyncError && <div className="import-error">{fbsSyncError}</div>}
+                {fbsApplyReport?.summary?.compensations > 0 && (
+                  <div className="import-warning">
+                    <strong>Авто-компенсации учёта ({fbsApplyReport.summary.compensations} SKU)</strong>
+                    {' — OZON отгрузил больше, чем числилось в учёте. Остатки обнулены, создана корректировка.'}
+                    {fbsApplyReport.details?.some((d) => d.compensations?.length > 0) && (
+                      <div className="stack-sm" style={{ marginTop: '6px' }}>
+                        {fbsApplyReport.details
+                          .filter((d) => d.compensations?.length > 0)
+                          .map((d) =>
+                            d.compensations.map((c) => (
+                              <div key={`comp-${d.day}-${c.sku}`}>
+                                {d.day} · <strong>{c.sku}</strong> ({c.name}) — недостача {c.qty} шт
+                              </div>
+                            ))
+                          )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
             <div className="card">
               <h4>Импорт FBS из CSV</h4>
