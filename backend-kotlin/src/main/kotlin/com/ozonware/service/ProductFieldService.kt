@@ -6,6 +6,7 @@ import com.ozonware.repository.ProductFieldRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
+/** Schema-level CRUD for user-defined product fields — manages [ProductField] definitions (not their values). */
 @Service
 class ProductFieldService(
     private val productFieldRepository: ProductFieldRepository

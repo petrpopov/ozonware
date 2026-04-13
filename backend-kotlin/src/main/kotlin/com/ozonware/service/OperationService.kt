@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.time.LocalDate
 
+/** Warehouse operation service — paginated list with RSQL filtering, transactional create/update/delete. */
 @Service
 class OperationService(
     private val operationRepository: OperationRepository,

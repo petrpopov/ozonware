@@ -2,15 +2,20 @@ package com.ozonware.controller
 
 import com.ozonware.service.GoogleSheetsService
 import com.ozonware.service.SettingsService
+import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
+/** REST controller for Google Sheets integration — config management, connection test, quantity sync. */
 @RestController
 @RequestMapping("/api")
 class GoogleSheetsController(
     private val googleSheetsService: GoogleSheetsService,
     private val settingsService: SettingsService
 ) {
+    companion object {
+        private val log = LoggerFactory.getLogger(GoogleSheetsController::class.java)
+    }
 
     @GetMapping("/google-sheets-config")
     fun getConfig(): ResponseEntity<Map<String, Any>> {
@@ -36,6 +41,7 @@ class GoogleSheetsController(
 
     @PostMapping("/google-sheets-config")
     fun saveConfig(@RequestBody body: Map<String, Any>): ResponseEntity<Any> {
+        log.info("[GoogleSheetsController] saveConfig: spreadsheetId={} sheet={}", body["spreadsheetId"], body["sheetName"])
         val setting = settingsService.saveSetting("google_sheets_config", body)
         return ResponseEntity.ok(setting.settingValue!!)
     }
@@ -78,6 +84,7 @@ class GoogleSheetsController(
                 "error" to "Google Sheets service not initialized. Check credentials file."
             ))
         }
+        log.info("[GoogleSheetsController] sync requested: spreadsheetId={} sheet={}", spreadsheetId, body["sheetName"])
         return try {
             val result = googleSheetsService.syncProducts(
                 spreadsheetId = spreadsheetId,

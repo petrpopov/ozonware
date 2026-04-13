@@ -7,6 +7,7 @@ import org.springframework.data.web.PageableDefault
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
+/** REST controller for warehouse operations — paginated list, create, update, delete for receipts/shipments/writeoffs. */
 @RestController
 @RequestMapping("/api/operations")
 class OperationController(

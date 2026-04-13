@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
+/** REST controller for administrative maintenance — resets all transactional state and product quantities to zero. */
 @RestController
 @RequestMapping("/api/maintenance")
 class MaintenanceController(

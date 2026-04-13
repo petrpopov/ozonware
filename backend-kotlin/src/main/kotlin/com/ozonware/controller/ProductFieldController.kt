@@ -4,6 +4,7 @@ import com.ozonware.service.ProductFieldService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
+/** REST controller for product field schema — CRUD for user-defined custom fields on products. */
 @RestController
 @RequestMapping("/api/product-fields")
 class ProductFieldController(

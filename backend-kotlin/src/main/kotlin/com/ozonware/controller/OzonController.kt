@@ -7,13 +7,16 @@ import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 
+/** REST controller for OZON integration — sync triggers, shipment creation, settings management. */
 @RestController
 @RequestMapping("/api/ozon")
 class OzonController(
     private val ozonService: OzonService,
     private val settingsService: SettingsService
 ) {
-    private val log = LoggerFactory.getLogger(OzonController::class.java)
+    companion object {
+        private val log = LoggerFactory.getLogger(OzonController::class.java)
+    }
 
     @GetMapping("/settings")
     fun getSettings(): ResponseEntity<Any?> {
@@ -29,6 +32,7 @@ class OzonController(
 
     @PostMapping("/settings")
     fun saveSettings(@RequestBody settings: Map<String, Any?>): ResponseEntity<Map<String, Any>> {
+        log.info("[OzonController] saveSettings: keys={}", settings.keys)
         return try {
             settingsService.saveSetting("ozon_settings", settings)
             ResponseEntity.ok(mapOf("success" to true))

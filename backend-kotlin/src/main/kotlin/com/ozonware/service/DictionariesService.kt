@@ -7,6 +7,7 @@ import java.time.LocalDateTime
 import java.time.ZoneOffset
 import java.util.concurrent.ConcurrentHashMap
 
+/** In-memory-cached access to reference (lookup) tables — operation types, reasons, warehouses, statuses. */
 @Service
 class DictionariesService(
     private val operationTypeRepository: OperationTypeRepository,

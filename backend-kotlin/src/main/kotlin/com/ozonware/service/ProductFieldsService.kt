@@ -3,6 +3,7 @@ package com.ozonware.service
 import com.ozonware.entity.ProductField
 import com.ozonware.repository.ProductFieldRepository
 import com.ozonware.repository.ProductFieldValueRepository
+import com.ozonware.util.SystemFieldKind
 import jakarta.annotation.PostConstruct
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -17,23 +18,53 @@ class ProductFieldsService(
     private val productFieldRepository: ProductFieldRepository,
     private val productFieldValueRepository: ProductFieldValueRepository
 ) {
-    private val log = LoggerFactory.getLogger(ProductFieldsService::class.java)
+    companion object {
+        private val log = LoggerFactory.getLogger(ProductFieldsService::class.java)
+    }
 
     /**
-     * На старте проверяет, что системные поля имеют корректный kind.
-     * Страхует от ситуации когда V10 миграция выполнилась до создания полей.
+     * На старте:
+     * 1. Миграция — исправляет kind у полей найденных по историческому display name (разовая операция).
+     * 2. Гарантия — создаёт системные поля если их нет в БД по kind (fail-safe при ручном удалении).
      */
     @PostConstruct
     @Transactional
     fun bootstrapSystemFieldKinds() {
-        val kindMap = mapOf("OZON" to "ozon_sku", "Артикул OZON" to "ozon_article", "Фото OZON" to "ozon_photo")
-        for ((name, kind) in kindMap) {
+        // Step 1: migration — fix kind by legacy display name (historical V10 mapping)
+        val legacyNameToKind = mapOf(
+            "OZON" to SystemFieldKind.OZON_SKU,
+            "Артикул OZON" to SystemFieldKind.OZON_ARTICLE,
+            "Фото OZON" to SystemFieldKind.OZON_PHOTO
+        )
+        for ((name, fieldKind) in legacyNameToKind) {
             val field = productFieldRepository.findByName(name) ?: continue
-            if (field.kind != kind) {
-                field.kind = kind
+            if (field.kind != fieldKind.code) {
+                field.kind = fieldKind.code
                 field.isSystem = true
                 productFieldRepository.save(field)
-                log.info("[ProductFieldsService] bootstrap: поле '{}' → kind='{}'", name, kind)
+                log.info("[ProductFieldsService] bootstrap: поле '{}' → kind='{}'", name, fieldKind.code)
+            }
+        }
+
+        // Step 2: guarantee — create any system field missing by kind
+        val kindToDefaultName = legacyNameToKind.entries.associate { it.value to it.key }
+        for (fieldKind in SystemFieldKind.entries) {
+            if (productFieldRepository.findByKind(fieldKind.code) == null) {
+                val displayName = kindToDefaultName[fieldKind] ?: fieldKind.code
+                val maxPos = productFieldRepository.findAll().maxOfOrNull { it.position } ?: 0
+                productFieldRepository.save(
+                    ProductField(
+                        name = displayName,
+                        type = "text",
+                        typeCode = "text",
+                        kind = fieldKind.code,
+                        isSystem = true,
+                        required = false,
+                        showInTable = false,
+                        position = maxPos + 10
+                    )
+                )
+                log.info("[ProductFieldsService] bootstrap: создано системное поле kind='{}' name='{}'", fieldKind.code, displayName)
             }
         }
     }
@@ -74,16 +105,22 @@ class ProductFieldsService(
 
     /** Returns the stored photo URL for a product, or null if absent. */
     fun readPhotoUrl(productId: Long): String? {
-        val field = productFieldRepository.findByKind("ozon_photo") ?: return null
+        val field = productFieldRepository.findByKind(SystemFieldKind.OZON_PHOTO.code) ?: return null
         return productFieldValueRepository.findByProductIdAndFieldId(productId, field.id ?: return null)?.valueText
     }
 
-    /** Upsert a text value for the field identified by kind. No-op if field not found. */
+    /**
+     * Upsert a text value for the field identified by kind.
+     * @throws IllegalStateException if the field is not found — indicates a bootstrap failure.
+     */
     @Transactional
     fun writeTextValue(productId: Long, fieldKind: String, value: String) {
-        val field = productFieldRepository.findByKind(fieldKind) ?: return
-        val fid = field.id ?: return
+        val field = productFieldRepository.findByKind(fieldKind)
+            ?: throw IllegalStateException("Field kind='$fieldKind' not found for productId=$productId — bootstrap may have failed")
+        val fid = field.id
+            ?: throw IllegalStateException("Field kind='$fieldKind' has null id")
         productFieldValueRepository.upsertTextValue(productId, fid, value)
+        log.debug("[ProductFieldsService] writeTextValue: productId={} fieldKind='{}' len={}", productId, fieldKind, value.length)
     }
 
     /**
@@ -92,17 +129,27 @@ class ProductFieldsService(
      */
     @Transactional
     fun syncFieldValues(productId: Long, customFields: List<Map<String, Any>>) {
+        var updated = 0
+        var deleted = 0
+        var skipped = 0
         for (cf in customFields) {
             val name = cf["name"] as? String ?: continue
             val value = cf["value"] as? String ?: continue
-            val field = productFieldRepository.findByName(name) ?: continue
+            val field = productFieldRepository.findByName(name)
+            if (field == null) { skipped++; continue }
             val fid = field.id ?: continue
             if (value.isBlank()) {
                 productFieldValueRepository.findByProductIdAndFieldId(productId, fid)
                     ?.id?.let { productFieldValueRepository.deleteById(it) }
+                deleted++
             } else {
                 productFieldValueRepository.upsertTextValue(productId, fid, value)
+                updated++
             }
+        }
+        if (updated + deleted > 0) {
+            log.info("[ProductFieldsService] syncFieldValues: productId={} updated={} deleted={} skipped={}",
+                productId, updated, deleted, skipped)
         }
     }
 }

@@ -21,6 +21,7 @@ import java.math.BigDecimal
 import java.time.LocalDateTime
 import java.time.ZoneOffset
 
+/** Imports OZON order rows from Google Sheets — matches products, creates operations, stores import batches. */
 @Service
 class OzonOrderImportService(
     private val batchRepository: OzonOrderImportBatchRepository,

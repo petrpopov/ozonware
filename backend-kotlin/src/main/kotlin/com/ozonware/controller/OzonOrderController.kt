@@ -4,6 +4,7 @@ import com.ozonware.service.OzonOrderImportService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
+/** REST controller for OZON order imports — accepts row data, returns import history and per-product stats. */
 @RestController
 @RequestMapping("/api/ozon/orders")
 class OzonOrderController(

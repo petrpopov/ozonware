@@ -1,17 +1,20 @@
 package com.ozonware.util
 
 import com.ozonware.entity.Product
-import com.ozonware.repository.ProductFieldValueRepository
 import com.ozonware.repository.ProductRepository
+import com.ozonware.service.SystemFieldAccessor
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 
+/** Matches OZON API products to internal [Product] entities by OZON SKU, offer_id, or internal SKU. */
 @Component
 class ProductMatcher(
     private val productRepository: ProductRepository,
-    private val productFieldValueRepository: ProductFieldValueRepository
+    private val systemFieldAccessor: SystemFieldAccessor
 ) {
-    private val log = LoggerFactory.getLogger(ProductMatcher::class.java)
+    companion object {
+        private val log = LoggerFactory.getLogger(ProductMatcher::class.java)
+    }
 
     data class LookupCache(
         val byOffer: Map<String, Product>,
@@ -24,7 +27,7 @@ class ProductMatcher(
         val productById = products.associateBy { it.id }
         val bySku = products.associateBy { it.sku.lowercase() }
 
-        val articleValues = productFieldValueRepository.findAllByFieldKind("ozon_article")
+        val articleValues = systemFieldAccessor.findAllValues(SystemFieldKind.OZON_ARTICLE)
         val byOffer = articleValues
             .filter { !it.valueText.isNullOrBlank() }
             .mapNotNull { pfv ->
@@ -32,7 +35,7 @@ class ProductMatcher(
                 pfv.valueText!!.lowercase().trim() to product
             }.toMap()
 
-        val skuValues = productFieldValueRepository.findAllByFieldKind("ozon_sku")
+        val skuValues = systemFieldAccessor.findAllValues(SystemFieldKind.OZON_SKU)
         val byOzonSku = skuValues
             .filter { !it.valueText.isNullOrBlank() }
             .mapNotNull { pfv ->
@@ -67,7 +70,7 @@ class ProductMatcher(
         val dmRegex = Regex("(_dm\\d*)$", RegexOption.IGNORE_CASE)
         if (dmRegex.containsMatchIn(trimmedOffer)) {
             val art = dmRegex.replace(trimmedOffer, "")
-            val pfv = productFieldValueRepository.findAllByFieldKind("ozon_article")
+            val pfv = systemFieldAccessor.findAllValues(SystemFieldKind.OZON_ARTICLE)
                 .firstOrNull { it.valueText?.trim() == art }
             if (pfv != null) return productRepository.findById(pfv.productId).orElse(null)
         }
@@ -77,7 +80,7 @@ class ProductMatcher(
 
     fun findProductByOzonOfferId(offerId: String): Product? {
         val trimmed = offerId.trim()
-        val pfv = productFieldValueRepository.findAllByFieldKind("ozon_article")
+        val pfv = systemFieldAccessor.findAllValues(SystemFieldKind.OZON_ARTICLE)
             .firstOrNull { it.valueText?.trim() == trimmed }
         return pfv?.let { productRepository.findById(it.productId).orElse(null) }
     }

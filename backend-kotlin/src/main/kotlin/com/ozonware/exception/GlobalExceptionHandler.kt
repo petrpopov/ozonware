@@ -9,9 +9,12 @@ import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import jakarta.servlet.http.HttpServletRequest
 
+/** Global Spring MVC exception handler — maps domain exceptions to HTTP error responses. */
 @RestControllerAdvice
 class GlobalExceptionHandler {
-    private val log = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
+    companion object {
+        private val log = LoggerFactory.getLogger(GlobalExceptionHandler::class.java)
+    }
 
     @ExceptionHandler(ResourceNotFoundException::class)
     fun handleNotFound(ex: ResourceNotFoundException): ResponseEntity<Map<String, String>> {

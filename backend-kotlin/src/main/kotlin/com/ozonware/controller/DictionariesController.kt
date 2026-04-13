@@ -4,6 +4,7 @@ import com.ozonware.service.DictionariesService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
+/** REST controller for reference dictionaries — CRUD for operation types, reasons, warehouses, and other lookup tables. */
 @RestController
 @RequestMapping("/api/dictionaries")
 class DictionariesController(private val dictionariesService: DictionariesService) {

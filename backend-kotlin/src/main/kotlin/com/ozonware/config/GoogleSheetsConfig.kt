@@ -11,10 +11,12 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.io.File
 
+/** Spring configuration — creates and configures the Google Sheets API client bean. */
 @Configuration
 class GoogleSheetsConfig {
-
-    private val log = LoggerFactory.getLogger(GoogleSheetsConfig::class.java)
+    companion object {
+        private val log = LoggerFactory.getLogger(GoogleSheetsConfig::class.java)
+    }
 
     @Value("\${google.service-account-key}")
     private lateinit var serviceAccountKey: String

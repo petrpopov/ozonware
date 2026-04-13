@@ -10,6 +10,7 @@ import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
+/** Product catalog service — CRUD for [Product] entities with custom field sync via [ProductFieldsService]. */
 @Service
 class ProductService(
     private val productRepository: ProductRepository,

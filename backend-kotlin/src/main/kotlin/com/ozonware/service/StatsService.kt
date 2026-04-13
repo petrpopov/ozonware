@@ -5,6 +5,7 @@ import com.ozonware.repository.ProductRepository
 import com.ozonware.repository.WriteoffRepository
 import org.springframework.stereotype.Service
 
+/** Aggregate warehouse stats — product totals, writeoff details and summaries via repository queries. */
 @Service
 class StatsService(
     private val productRepository: ProductRepository,

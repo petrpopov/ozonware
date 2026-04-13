@@ -4,6 +4,7 @@ import com.ozonware.service.SettingsService
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
+/** REST controller for user settings — generic key-value read/write. */
 @RestController
 @RequestMapping("/api/settings")
 class SettingsController(

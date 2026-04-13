@@ -6,13 +6,15 @@ import com.ozonware.repository.ProductRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 
+/** Google Sheets API integration — reads SKUs from a sheet and batch-updates product quantities. */
 @Service
 class GoogleSheetsService(
     private val sheets: Sheets?,
     private val productRepository: ProductRepository
 ) {
-
-    private val log = LoggerFactory.getLogger(GoogleSheetsService::class.java)
+    companion object {
+        private val log = LoggerFactory.getLogger(GoogleSheetsService::class.java)
+    }
 
     val isInitialized: Boolean get() = sheets != null
 
@@ -41,6 +43,9 @@ class GoogleSheetsService(
             "Google Sheets API not initialized. Check credentials file."
         )
 
+        log.info("[GoogleSheetsService] syncProducts started: spreadsheetId={} sheet={} skuCol={} qtyCol={} startRow={}",
+            spreadsheetId, sheetName, skuColumn, quantityColumn, startRow)
+
         // Step 1: Read SKU column from the sheet
         val skuRange = "$sheetName!$skuColumn$startRow:$skuColumn"
         val skuData = api.spreadsheets().values().get(spreadsheetId, skuRange).execute()
@@ -54,7 +59,7 @@ class GoogleSheetsService(
                 skuToRow[sku] = startRow + index
             }
         }
-        log.info("Found ${skuToRow.size} SKUs in spreadsheet")
+        log.info("[GoogleSheetsService] read {} SKUs from spreadsheet", skuToRow.size)
 
         // Step 2: Build update list
         val products = productRepository.findAll()
@@ -77,11 +82,16 @@ class GoogleSheetsService(
             }
         }
 
+        if (notFound > 0) {
+            log.warn("[GoogleSheetsService] {} products not found in spreadsheet", notFound)
+        }
+
         if (updates.isEmpty()) {
+            log.info("[GoogleSheetsService] syncProducts complete: nothing to update matched={} notFound={}", matched, notFound)
             return mapOf("success" to true, "updated" to 0, "matched" to 0, "notFound" to notFound)
         }
 
-        log.info("Updating ${updates.size} rows in spreadsheet...")
+        log.info("[GoogleSheetsService] updating {} rows in spreadsheet...", updates.size)
 
         // Step 3: Batch update in chunks of 1000 (API limit)
         val batchSize = 1000
@@ -94,7 +104,7 @@ class GoogleSheetsService(
                 .setData(batch)
             api.spreadsheets().values().batchUpdate(spreadsheetId, body).execute()
             totalUpdated += batch.size
-            log.info("Updated $totalUpdated/${updates.size}")
+            log.info("[GoogleSheetsService] batch progress: {}/{}", totalUpdated, updates.size)
 
             // Rate-limit pause between batches
             if (i + batchSize < updates.size) {
@@ -102,6 +112,7 @@ class GoogleSheetsService(
             }
         }
 
+        log.info("[GoogleSheetsService] syncProducts complete: matched={} updated={} notFound={}", matched, totalUpdated, notFound)
         return mapOf(
             "success" to true,
             "updated" to totalUpdated,

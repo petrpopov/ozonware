@@ -20,6 +20,7 @@ import com.ozonware.repository.OzonPostingRepository
 import com.ozonware.repository.OperationRepository
 import com.ozonware.repository.ProductRepository
 import com.ozonware.util.ProductMatcher
+import com.ozonware.util.SystemFieldKind
 import jakarta.persistence.EntityManager
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
@@ -41,6 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import org.springframework.transaction.support.TransactionTemplate
 
+/** OZON API synchronization — FBS/FBO postings, stock sync, product image import, shipment creation. */
 @Service
 class OzonService(
     private val productRepository: ProductRepository,
@@ -54,13 +56,16 @@ class OzonService(
     private val productMatcher: ProductMatcher,
     private val settingsService: SettingsService,
     private val productFieldsService: ProductFieldsService,
+    private val systemFieldAccessor: SystemFieldAccessor,
     private val ozonProperties: OzonProperties,
     private val entityManager: EntityManager,
     private val objectMapper: ObjectMapper,
     private val transactionTemplate: TransactionTemplate
 ) {
 
-    private val log = LoggerFactory.getLogger(OzonService::class.java)
+    companion object {
+        private val log = LoggerFactory.getLogger(OzonService::class.java)
+    }
     private val moscowZone = ZoneId.of("Europe/Moscow")
 
     private val httpClient = OkHttpClient.Builder().build()
@@ -638,7 +643,7 @@ class OzonService(
         val apiKey = settings["apiKey"]?.asText()
             ?: throw BadRequestException("OZON Client ID and API Key are required")
 
-        productFieldsService.ensureSystemField("Фото OZON", "ozon_photo", "image")
+        productFieldsService.ensureSystemField("Фото OZON", SystemFieldKind.OZON_PHOTO.code, "image")
 
         val offerIds = mutableListOf<String>()
         var lastId = ""
@@ -714,7 +719,7 @@ class OzonService(
                 val prevPhoto = productFieldsService.readPhotoUrl(product.id!!)
                 if (prevPhoto == imageUrl) continue
 
-                productFieldsService.writeTextValue(product.id!!, "ozon_photo", imageUrl)
+                systemFieldAccessor.writeText(product.id!!, SystemFieldKind.OZON_PHOTO, imageUrl)
                 updated++
             }
         }

@@ -9,6 +9,7 @@ import org.springframework.data.web.PageableDefault
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
+/** REST controller for product catalog — paginated list with search, CRUD with custom field support. */
 @RestController
 @RequestMapping("/api/products")
 class ProductController(

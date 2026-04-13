@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
+/** REST controller for aggregate warehouse stats — product counts, writeoffs, writeoff summaries. */
 @RestController
 @RequestMapping("/api")
 class StatsController(

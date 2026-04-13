@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import java.time.Instant
 
+/** Health-check endpoint — returns application liveness status and current timestamp. */
 @RestController
 @RequestMapping("/api/health")
 class HealthController {
