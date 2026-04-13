@@ -180,12 +180,8 @@ body {
     padding: 32px 48px;
   }
 
-  .cell-ellipsis {
-    max-width: 300px;
-  }
-
   .cell-name {
-    max-width: 420px;
+    max-width: 100%;
   }
 }
 
@@ -513,9 +509,11 @@ body {
 .btn-icon {
   position: relative;
   width: 32px;
+  min-width: 32px;
   height: 32px;
   padding: 0;
   border-radius: 6px;
+  flex-shrink: 0;
 }
 
 .btn-icon::after {
@@ -529,6 +527,12 @@ body {
   display: flex;
   gap: 6px;
   flex-wrap: nowrap;
+  justify-content: flex-end;
+}
+
+td.row-actions {
+  width: auto;
+  min-width: 76px;
 }
 
 .modal-actions {
@@ -537,15 +541,18 @@ body {
 }
 
 .cell-ellipsis {
-  display: inline-block;
-  max-width: 210px;
+  display: block;
+  width: 100%;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
   vertical-align: bottom;
 }
 
 .cell-name {
-  max-width: 260px;
+  max-width: 100%;
+  width: 100%;
 }
 
 .id-link-btn {
@@ -1092,6 +1099,12 @@ body {
   border-radius: 8px;
   background: var(--bg-card);
   padding: 8px;
+}
+
+.note-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .channel-badge {
@@ -2333,12 +2346,8 @@ body {
     max-height: 42vh;
   }
 
-  .cell-ellipsis {
-    max-width: 160px;
-  }
-
   .cell-name {
-    max-width: 180px;
+    max-width: 100%;
   }
 }
 

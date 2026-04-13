@@ -64,3 +64,15 @@ For detailed information, read the relevant `.memory_bank/` file:
 - All stock-modifying operations are **transactional**.
 - No auth — single user (user_id=1).
 - No test framework or linter configured.
+
+## Database Access
+
+`psql` is NOT installed on the host. Always run SQL via Docker exec into the container:
+
+```bash
+docker exec -it warehouse-db psql -U warehouse_user -d openws -c "..."
+# Multi-line:
+docker exec -i warehouse-db psql -U warehouse_user -d openws << 'SQL'
+SELECT ...;
+SQL
+```

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import Modal from '../components/Modal.jsx';
+import { TrashIcon } from '../components/Icons.jsx';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { services } from '../api/services.js';
 import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
@@ -321,12 +322,12 @@ export default function SettingsPage() {
                 </label>
                 <button
                   type="button"
-                  className="settings-row-del settings-field-del"
+                  className="btn btn-danger btn-icon"
                   aria-label="Удалить поле"
                   title="Удалить поле"
                   onClick={() => setFields((prev) => prev.filter((_, idx) => idx !== index))}
                 >
-                  ×
+                  <TrashIcon />
                 </button>
               </div>
 

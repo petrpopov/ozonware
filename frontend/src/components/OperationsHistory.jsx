@@ -242,9 +242,11 @@ export default function OperationsHistory({
                 <td>{getPositionsCount(op)}</td>
                 <td>{op.total_quantity}</td>
                 <td>
-                  {op.channel_code === 'ozon_fbs' && <span className="channel-badge channel-badge--fbs">OZON FBS</span>}
-                  {op.channel_code === 'ozon_fbo' && <span className="channel-badge channel-badge--fbo">OZON FBO</span>}
-                  <span className="cell-ellipsis" title={op.note || '—'}>{op.note || '—'}</span>
+                  <div className="note-cell">
+                    {op.channel_code === 'ozon_fbs' && <span className="channel-badge channel-badge--fbs">OZON FBS</span>}
+                    {op.channel_code === 'ozon_fbo' && <span className="channel-badge channel-badge--fbo">OZON FBO</span>}
+                    <span className="cell-ellipsis" title={op.note || '—'}>{op.note || '—'}</span>
+                  </div>
                 </td>
                 <td className="row-actions">
                   {onEdit && (!canEditOperation || canEditOperation(op)) && (
