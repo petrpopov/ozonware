@@ -33,8 +33,18 @@ class OzonOrderImportService(
     private val operationItemRepository: OperationItemRepository,
     private val operationInventoryDiffRepository: OperationInventoryDiffRepository,
     private val entityManager: EntityManager,
-    private val objectMapper: ObjectMapper
+    private val objectMapper: ObjectMapper,
+    private val settingsService: SettingsService
 ) {
+
+    private fun loadColumnMapping(): com.ozonware.dto.OzonCsvColumnMapping {
+        return try {
+            val raw = settingsService.getSetting("ozon_csv_column_mapping")
+            objectMapper.convertValue(raw, com.ozonware.dto.OzonCsvColumnMapping::class.java)
+        } catch (e: Exception) {
+            com.ozonware.dto.OzonCsvColumnMapping()
+        }
+    }
 
     @Transactional
     fun importRows(body: Map<String, Any?>): Map<String, Any?> {
@@ -59,9 +69,11 @@ class OzonOrderImportService(
         )
         batchRepository.save(batch)
 
+        val col = loadColumnMapping()
+
         // Build posting_number → id cache to populate FK on import
         val postingNumbersInBatch = rows.mapNotNull {
-            getCell(it, "Номер отправления").trim().ifEmpty { null }
+            getCell(it, col.postingNumber).trim().ifEmpty { null }
         }.distinct()
         val postingIdCache = mutableMapOf<String, Long>()
         for (num in postingNumbersInBatch) {
@@ -75,8 +87,8 @@ class OzonOrderImportService(
         var unmatched = 0
 
         for (rawRow in rows) {
-            val status = getCell(rawRow, "Статус").trim().lowercase()
-            val transferAt = parseDateTime(getCell(rawRow, "Фактическая дата передачи в доставку"))
+            val status = getCell(rawRow, col.status).trim().lowercase()
+            val transferAt = parseDateTime(getCell(rawRow, col.transferAt))
 
             // Skip canceled orders without transfer date
             if ((status == "отменён" || status == "отменен") && transferAt == null) {
@@ -84,10 +96,10 @@ class OzonOrderImportService(
                 continue
             }
 
-            val quantity = parseInteger(getCell(rawRow, "Количество"))
-            val postingNumber = getCell(rawRow, "Номер отправления").trim()
-            val offerId = getCell(rawRow, "Артикул").trim()
-            val ozonSku = getCell(rawRow, "SKU").trim()
+            val quantity = parseInteger(getCell(rawRow, col.quantity))
+            val postingNumber = getCell(rawRow, col.postingNumber).trim()
+            val offerId = getCell(rawRow, col.offerId).trim()
+            val ozonSku = getCell(rawRow, col.ozonSku).trim()
 
             if (postingNumber.isEmpty() || quantity == null || quantity <= 0) {
                 skipped++
@@ -118,8 +130,8 @@ class OzonOrderImportService(
             val externalKey = listOf(
                 source, postingNumber, offerId.lowercase(),
                 normalizeOzonSku(ozonSku),
-                getCell(rawRow, "Принят в обработку"),
-                getCell(rawRow, "Номер заказа")
+                getCell(rawRow, col.acceptedAt),
+                getCell(rawRow, col.orderNumber)
             ).joinToString("|")
 
             val existingLine = orderLineRepository.findByExternalLineKey(externalKey)
@@ -127,28 +139,28 @@ class OzonOrderImportService(
             if (existingLine != null) {
                 existingLine.batchId = batch.id
                 existingLine.source = source!!
-                existingLine.orderNumber = getCell(rawRow, "Номер заказа")
+                existingLine.orderNumber = getCell(rawRow, col.orderNumber)
                 existingLine.postingNumber = postingNumber
-                existingLine.acceptedAt = parseDateTime(getCell(rawRow, "Принят в обработку"))
-                existingLine.shipmentDate = parseDateTime(getCell(rawRow, "Дата отгрузки"))
-                existingLine.shipmentDeadline = parseDateTime(getCell(rawRow, "Дата отгрузки без просрочки"))
+                existingLine.acceptedAt = parseDateTime(getCell(rawRow, col.acceptedAt))
+                existingLine.shipmentDate = parseDateTime(getCell(rawRow, col.shipmentDate))
+                existingLine.shipmentDeadline = parseDateTime(getCell(rawRow, col.shipmentDeadline))
                 existingLine.transferAt = transferAt
-                existingLine.deliveryDate = parseDateTime(getCell(rawRow, "Дата доставки"))
-                existingLine.cancellationDate = parseDateTime(getCell(rawRow, "Дата отмены"))
-                existingLine.status = getCell(rawRow, "Статус").trim()
-                existingLine.productName = getCell(rawRow, "Название товара")
+                existingLine.deliveryDate = parseDateTime(getCell(rawRow, col.deliveryDate))
+                existingLine.cancellationDate = parseDateTime(getCell(rawRow, col.cancellationDate))
+                existingLine.status = getCell(rawRow, col.status).trim()
+                existingLine.productName = getCell(rawRow, col.productName)
                 existingLine.ozonSku = ozonSku
                 existingLine.offerId = offerId
                 existingLine.quantity = quantity
-                existingLine.yourPrice = parseDecimal(getCell(rawRow, "Ваша цена"))
-                existingLine.paidByCustomer = parseDecimal(getCell(rawRow, "Оплачено покупателем"))
-                existingLine.shipmentAmount = parseDecimal(getCell(rawRow, "Сумма отправления"))
-                existingLine.currency = getCell(rawRow, "Код валюты отправления", "Код валюты товара")
-                existingLine.discountPercent = getCell(rawRow, "Скидка %")
-                existingLine.discountRub = parseDecimal(getCell(rawRow, "Скидка руб"))
-                existingLine.shippingCost = parseDecimal(getCell(rawRow, "Стоимость доставки"))
-                existingLine.promotions = getCell(rawRow, "Акции")
-                existingLine.volumetricWeightKg = parseDecimal(getCell(rawRow, "Объемный вес товаров, кг"))
+                existingLine.yourPrice = parseDecimal(getCell(rawRow, col.yourPrice))
+                existingLine.paidByCustomer = parseDecimal(getCell(rawRow, col.paidByCustomer))
+                existingLine.shipmentAmount = parseDecimal(getCell(rawRow, col.shipmentAmount))
+                existingLine.currency = getCell(rawRow, col.currencyPrimary, col.currencyFallback)
+                existingLine.discountPercent = getCell(rawRow, col.discountPercent)
+                existingLine.discountRub = parseDecimal(getCell(rawRow, col.discountRub))
+                existingLine.shippingCost = parseDecimal(getCell(rawRow, col.shippingCost))
+                existingLine.promotions = getCell(rawRow, col.promotions)
+                existingLine.volumetricWeightKg = parseDecimal(getCell(rawRow, col.volumetricWeightKg))
                 existingLine.productId = matchedProduct?.id
                 existingLine.matchedBy = matchedBy
                 existingLine.postingId = postingIdCache[postingNumber]
@@ -161,28 +173,28 @@ class OzonOrderImportService(
                     externalLineKey = externalKey,
                     batchId = batch.id,
                     source = source!!,
-                    orderNumber = getCell(rawRow, "Номер заказа"),
+                    orderNumber = getCell(rawRow, col.orderNumber),
                     postingNumber = postingNumber,
-                    acceptedAt = parseDateTime(getCell(rawRow, "Принят в обработку")),
-                    shipmentDate = parseDateTime(getCell(rawRow, "Дата отгрузки")),
-                    shipmentDeadline = parseDateTime(getCell(rawRow, "Дата отгрузки без просрочки")),
+                    acceptedAt = parseDateTime(getCell(rawRow, col.acceptedAt)),
+                    shipmentDate = parseDateTime(getCell(rawRow, col.shipmentDate)),
+                    shipmentDeadline = parseDateTime(getCell(rawRow, col.shipmentDeadline)),
                     transferAt = transferAt,
-                    deliveryDate = parseDateTime(getCell(rawRow, "Дата доставки")),
-                    cancellationDate = parseDateTime(getCell(rawRow, "Дата отмены")),
-                    status = getCell(rawRow, "Статус").trim(),
-                    productName = getCell(rawRow, "Название товара"),
+                    deliveryDate = parseDateTime(getCell(rawRow, col.deliveryDate)),
+                    cancellationDate = parseDateTime(getCell(rawRow, col.cancellationDate)),
+                    status = getCell(rawRow, col.status).trim(),
+                    productName = getCell(rawRow, col.productName),
                     ozonSku = ozonSku,
                     offerId = offerId,
                     quantity = quantity,
-                    yourPrice = parseDecimal(getCell(rawRow, "Ваша цена")),
-                    paidByCustomer = parseDecimal(getCell(rawRow, "Оплачено покупателем")),
-                    shipmentAmount = parseDecimal(getCell(rawRow, "Сумма отправления")),
-                    currency = getCell(rawRow, "Код валюты отправления", "Код валюты товара"),
-                    discountPercent = getCell(rawRow, "Скидка %"),
-                    discountRub = parseDecimal(getCell(rawRow, "Скидка руб")),
-                    shippingCost = parseDecimal(getCell(rawRow, "Стоимость доставки")),
-                    promotions = getCell(rawRow, "Акции"),
-                    volumetricWeightKg = parseDecimal(getCell(rawRow, "Объемный вес товаров, кг")),
+                    yourPrice = parseDecimal(getCell(rawRow, col.yourPrice)),
+                    paidByCustomer = parseDecimal(getCell(rawRow, col.paidByCustomer)),
+                    shipmentAmount = parseDecimal(getCell(rawRow, col.shipmentAmount)),
+                    currency = getCell(rawRow, col.currencyPrimary, col.currencyFallback),
+                    discountPercent = getCell(rawRow, col.discountPercent),
+                    discountRub = parseDecimal(getCell(rawRow, col.discountRub)),
+                    shippingCost = parseDecimal(getCell(rawRow, col.shippingCost)),
+                    promotions = getCell(rawRow, col.promotions),
+                    volumetricWeightKg = parseDecimal(getCell(rawRow, col.volumetricWeightKg)),
                     productId = matchedProduct?.id,
                     matchedBy = matchedBy,
                     postingId = postingIdCache[postingNumber],

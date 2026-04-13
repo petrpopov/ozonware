@@ -290,24 +290,21 @@ class OzonService(
     }
 
     private fun upsertPosting(posting: JsonNode): Long {
-        val postingNumber = posting["posting_number"]?.asText() ?: ""
-        val orderNumber = posting["order_number"]?.asText()
-        val status = posting["status"]?.asText() ?: ""
-        val inProcessAt = posting["in_process_at"]?.asText()
+        val dto = objectMapper.treeToValue(posting, com.ozonware.dto.ozon.OzonPostingDto::class.java)
 
-        val existing = ozonPostingRepository.findByPostingNumber(postingNumber)
+        val existing = ozonPostingRepository.findByPostingNumber(dto.postingNumber)
         return if (existing.isPresent) {
             val p = existing.get()
-            p.status = status
+            p.status = dto.status
             p.rawData = objectMapper.convertValue(posting, Map::class.java) as Map<String, Any?>
             p.updatedAt = LocalDateTime.now(ZoneOffset.UTC)
             ozonPostingRepository.save(p).id!!
         } else {
             val p = OzonPosting(
-                postingNumber = postingNumber,
-                orderNumber = orderNumber,
-                status = status,
-                inProcessAt = inProcessAt?.let { parseTimestamp(it) },
+                postingNumber = dto.postingNumber,
+                orderNumber = dto.orderNumber,
+                status = dto.status,
+                inProcessAt = dto.inProcessAt?.let { parseTimestamp(it) },
                 rawData = objectMapper.convertValue(posting, Map::class.java) as Map<String, Any?>
             )
             ozonPostingRepository.save(p).id!!
@@ -320,23 +317,18 @@ class OzonService(
         if (products == null || !products.isArray) return
 
         val cache = productMatcher.buildLookupCache()
+        val items = objectMapper.treeToValue(products, Array<com.ozonware.dto.ozon.OzonPostingItemDto>::class.java)
 
-        for (i in 0 until products.size()) {
-            val product = products[i]
-            val sku = product["sku"]?.asText() ?: ""
-            val offerId = product["offer_id"]?.asText()
-            val quantity = product["quantity"]?.asInt() ?: 0
-            val name = product["name"]?.asText()
-
-            val dbProduct = productMatcher.findProductByOzonSku(sku, offerId, cache)
+        for (dto in items) {
+            val dbProduct = productMatcher.findProductByOzonSku(dto.sku, dto.offerId, cache)
 
             val item = OzonPostingItem(
                 postingId = postingId,
-                ozonSku = sku,
+                ozonSku = dto.sku,
                 productId = dbProduct?.id,
-                quantity = quantity,
-                productName = name,
-                offerId = offerId
+                quantity = dto.quantity,
+                productName = dto.name,
+                offerId = dto.offerId
             )
             ozonPostingItemRepository.save(item)
         }
@@ -377,7 +369,7 @@ class OzonService(
             for (supply in supplies) {
                 if (fboCancelRequested.get()) throw CanceledException("FBO sync canceled by user")
 
-                val bundleId = supply["bundle_id"] as String
+                val bundleId = supply.bundleId
                 val bundleItems = fetchFboBundleItems(bundleId, clientId, apiKey)
                 transactionTemplate.executeWithoutResult {
                     val supplyDbId = upsertFboSupply(supply)
@@ -468,73 +460,74 @@ class OzonService(
         return orders
     }
 
-    private fun extractFboSupplies(orders: List<JsonNode>): List<Map<String, Any?>> {
-        val supplies = mutableListOf<Map<String, Any?>>()
+    private fun extractFboSupplies(orders: List<JsonNode>): List<com.ozonware.dto.ozon.OzonFboSupplyDto> {
+        val supplies = mutableListOf<com.ozonware.dto.ozon.OzonFboSupplyDto>()
         for (order in orders) {
             val sups = order["supplies"] ?: continue
             if (!sups.isArray) continue
 
+            val orderDto = objectMapper.treeToValue(order, com.ozonware.dto.ozon.OzonFboOrderDto::class.java)
+
             for (i in 0 until sups.size()) {
-                val supply = sups[i]
-                val bundleId = supply["bundle_id"]?.asText() ?: continue
+                val supplyNode = sups[i]
+                val supplyDto = objectMapper.treeToValue(supplyNode, com.ozonware.dto.ozon.OzonFboSupplyNodeDto::class.java)
+                if (supplyDto.bundleId.isNullOrEmpty()) continue
 
-                val warehouse = supply["storage_warehouse"]
+                val warehouseNode = supplyNode["storage_warehouse"]
+                val warehouseDto = warehouseNode?.let {
+                    objectMapper.treeToValue(it, com.ozonware.dto.ozon.OzonFboWarehouseDto::class.java)
+                }
 
-                supplies += mapOf(
-                    "order_id" to order["order_id"]?.asLong(),
-                    "order_number" to order["order_number"]?.asText(),
-                    "state" to (order["state"]?.asText() ?: supply["state"]?.asText()),
-                    "order_created_date" to order["created_date"]?.asText(),
-                    "state_updated_date" to order["state_updated_date"]?.asText(),
-                    "supply_id" to supply["supply_id"]?.asLong(),
-                    "bundle_id" to bundleId,
-                    "arrival_date" to warehouse?.get("arrival_date")?.asText(),
-                    "warehouse_id" to warehouse?.get("warehouse_id")?.asLong(),
-                    "warehouse_name" to warehouse?.get("name")?.asText(),
-                    "warehouse_address" to warehouse?.get("address")?.asText(),
-                    "raw_order" to objectMapper.convertValue(order, Map::class.java) as Map<String, Any?>,
-                    "raw_supply" to objectMapper.convertValue(supply, Map::class.java) as Map<String, Any?>
+                // state fallback: order state takes priority, supply state as fallback
+                val effectiveState = orderDto.state ?: supplyDto.state
+                val adjustedOrder = orderDto.copy(state = effectiveState)
+
+                supplies += com.ozonware.dto.ozon.OzonFboSupplyDto(
+                    order = adjustedOrder,
+                    supply = supplyDto,
+                    warehouse = warehouseDto,
+                    rawOrder = objectMapper.convertValue(order, Map::class.java) as Map<String, Any?>,
+                    rawSupply = objectMapper.convertValue(supplyNode, Map::class.java) as Map<String, Any?>
                 )
             }
         }
         return supplies
     }
 
-    private fun upsertFboSupply(supply: Map<String, Any?>): Long {
-        val bundleId = supply["bundle_id"] as String
-        val existing = ozonFboSupplyRepository.findByBundleId(bundleId)
+    private fun upsertFboSupply(dto: com.ozonware.dto.ozon.OzonFboSupplyDto): Long {
+        val existing = ozonFboSupplyRepository.findByBundleId(dto.bundleId)
 
         return if (existing.isPresent) {
             val s = existing.get()
-            s.orderId = supply["order_id"] as? Long ?: 0
-            s.orderNumber = supply["order_number"] as? String
-            s.state = supply["state"] as? String
-            s.orderCreatedDate = (supply["order_created_date"] as? String)?.let { parseTimestamp(it) }
-            s.stateUpdatedDate = (supply["state_updated_date"] as? String)?.let { parseTimestamp(it) }
-            s.supplyId = supply["supply_id"] as? Long
-            s.arrivalDate = (supply["arrival_date"] as? String)?.let { parseTimestamp(it) }
-            s.warehouseId = supply["warehouse_id"] as? Long
-            s.warehouseName = supply["warehouse_name"] as? String
-            s.warehouseAddress = supply["warehouse_address"] as? String
-            s.rawOrder = supply["raw_order"]?.let { @Suppress("UNCHECKED_CAST") it as Map<String, Any?> } ?: emptyMap()
-            s.rawSupply = supply["raw_supply"]?.let { @Suppress("UNCHECKED_CAST") it as Map<String, Any?> } ?: emptyMap()
+            s.orderId = dto.order.orderId ?: 0
+            s.orderNumber = dto.order.orderNumber
+            s.state = dto.order.state
+            s.orderCreatedDate = dto.order.createdDate?.let { parseTimestamp(it) }
+            s.stateUpdatedDate = dto.order.stateUpdatedDate?.let { parseTimestamp(it) }
+            s.supplyId = dto.supply.supplyId
+            s.arrivalDate = dto.warehouse?.arrivalDate?.let { parseTimestamp(it) }
+            s.warehouseId = dto.warehouse?.warehouseId
+            s.warehouseName = dto.warehouse?.name
+            s.warehouseAddress = dto.warehouse?.address
+            s.rawOrder = dto.rawOrder
+            s.rawSupply = dto.rawSupply
             s.updatedAt = LocalDateTime.now(ZoneOffset.UTC)
             ozonFboSupplyRepository.save(s).id!!
         } else {
             val s = OzonFboSupply(
-                orderId = supply["order_id"] as? Long ?: 0,
-                orderNumber = supply["order_number"] as? String,
-                state = supply["state"] as? String,
-                orderCreatedDate = (supply["order_created_date"] as? String)?.let { parseTimestamp(it) },
-                stateUpdatedDate = (supply["state_updated_date"] as? String)?.let { parseTimestamp(it) },
-                supplyId = supply["supply_id"] as? Long,
-                bundleId = bundleId,
-                arrivalDate = (supply["arrival_date"] as? String)?.let { parseTimestamp(it) },
-                warehouseId = supply["warehouse_id"] as? Long,
-                warehouseName = supply["warehouse_name"] as? String,
-                warehouseAddress = supply["warehouse_address"] as? String,
-                rawOrder = supply["raw_order"]?.let { @Suppress("UNCHECKED_CAST") it as Map<String, Any?> } ?: emptyMap(),
-                rawSupply = supply["raw_supply"]?.let { @Suppress("UNCHECKED_CAST") it as Map<String, Any?> } ?: emptyMap()
+                orderId = dto.order.orderId ?: 0,
+                orderNumber = dto.order.orderNumber,
+                state = dto.order.state,
+                orderCreatedDate = dto.order.createdDate?.let { parseTimestamp(it) },
+                stateUpdatedDate = dto.order.stateUpdatedDate?.let { parseTimestamp(it) },
+                supplyId = dto.supply.supplyId,
+                bundleId = dto.bundleId,
+                arrivalDate = dto.warehouse?.arrivalDate?.let { parseTimestamp(it) },
+                warehouseId = dto.warehouse?.warehouseId,
+                warehouseName = dto.warehouse?.name,
+                warehouseAddress = dto.warehouse?.address,
+                rawOrder = dto.rawOrder,
+                rawSupply = dto.rawSupply
             )
             ozonFboSupplyRepository.save(s).id!!
         }
@@ -578,20 +571,19 @@ class OzonService(
         ozonFboSupplyItemRepository.deleteBySupplyId(supplyDbId)
         val cache = productMatcher.buildLookupCache()
 
-        for (item in items) {
-            val sku = item["sku"]?.asText() ?: ""
-            val offerId = item["offer_id"]?.asText()
-            val dbProduct = productMatcher.findProductByOzonSku(sku, offerId, cache)
+        for (itemNode in items) {
+            val dto = objectMapper.treeToValue(itemNode, com.ozonware.dto.ozon.OzonFboSupplyItemDto::class.java)
+            val dbProduct = productMatcher.findProductByOzonSku(dto.sku, dto.offerId, cache)
 
             val supplyItem = OzonFboSupplyItem(
                 supplyId = supplyDbId,
-                ozonSku = sku,
+                ozonSku = dto.sku,
                 productId = dbProduct?.id,
-                quantity = item["quantity"]?.asInt() ?: 0,
-                productName = item["name"]?.asText(),
-                offerId = offerId,
-                iconPath = item["icon_path"]?.asText(),
-                rawItem = objectMapper.convertValue(item, Map::class.java) as Map<String, Any>
+                quantity = dto.quantity,
+                productName = dto.name,
+                offerId = dto.offerId,
+                iconPath = dto.iconPath,
+                rawItem = objectMapper.convertValue(itemNode, Map::class.java) as Map<String, Any>
             )
             ozonFboSupplyItemRepository.save(supplyItem)
         }
@@ -664,9 +656,10 @@ class OzonService(
             val data = makeRequestByUrl(ozonProperties.productListUrl, clientId, apiKey, payload, AtomicBoolean(false))
             val items = data["result"]?.get("items") ?: objectMapper.createArrayNode()
 
-            for (i in 0 until items.size()) {
-                val offerId = items[i]["offer_id"]?.asText()?.trim()
-                if (!offerId.isNullOrEmpty()) offerIds.add(offerId)
+            val itemDtos = objectMapper.treeToValue(items, Array<com.ozonware.dto.ozon.OzonProductItemDto>::class.java)
+            for (dto in itemDtos) {
+                val offerId = dto.offerId.trim()
+                if (offerId.isNotEmpty()) offerIds.add(offerId)
             }
             lastId = data["result"]?.get("last_id")?.asText()?.trim() ?: ""
             if (page > 1000) break
@@ -698,9 +691,9 @@ class OzonService(
             val details = data["result"] ?: objectMapper.createArrayNode()
             detailsCount += details.size()
 
-            for (i in 0 until details.size()) {
-                val detail = details[i]
-                val offerId = detail["offer_id"]?.asText()?.trim() ?: continue
+            val detailDtos = objectMapper.treeToValue(details, Array<com.ozonware.dto.ozon.OzonProductDetailDto>::class.java)
+            for (dto in detailDtos) {
+                val offerId = dto.offerId.trim()
                 if (offerId.isEmpty()) continue
 
                 val product = productMatcher.findProductByOzonOfferId(offerId)
@@ -710,7 +703,7 @@ class OzonService(
                 }
                 matched++
 
-                val imageUrl = detail["primary_image"]?.asText()?.trim() ?: ""
+                val imageUrl = dto.primaryImage?.trim() ?: ""
                 if (imageUrl.isEmpty()) {
                     noImage++
                     continue
