@@ -1,6 +1,9 @@
 package com.ozonware.controller
 
 import com.ozonware.service.OperationService
+import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
+import org.springframework.data.web.PageableDefault
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -12,15 +15,11 @@ class OperationController(
 
     @GetMapping
     fun getAll(
-        @RequestParam(required = false) type: String?,
-        @RequestParam(required = false) limit: String?,
-        @RequestParam(required = false) offset: String?,
-        @RequestParam(required = false) include_total: String?,
-        @RequestParam(required = false) shipment_kind: String?
+        @RequestParam(required = false) filter: String?,
+        @PageableDefault(size = 20, sort = ["operationDate"], direction = Sort.Direction.DESC)
+        pageable: Pageable
     ): ResponseEntity<Any> {
-        val includeTotal = include_total in listOf("1", "true")
-        val result = operationService.findAll(type, limit, offset, includeTotal, shipment_kind)
-        return ResponseEntity.ok(result)
+        return ResponseEntity.ok(operationService.findAll(filter, pageable))
     }
 
     @GetMapping("/{id}")

@@ -21,17 +21,32 @@ export default function WriteoffPage() {
   const [correctionQuery, setCorrectionQuery] = useState('');
   const [correctionItems, setCorrectionItems] = useState([]);
   const [correctionError, setCorrectionError] = useState('');
-  const [writeoffSort, setWriteoffSort] = useState({ key: 'id', dir: 'desc' });
-  const [correctionSort, setCorrectionSort] = useState({ key: 'id', dir: 'desc' });
+  const [writeoffSort, setWriteoffSort] = useState({ key: 'date', dir: 'desc' });
+  const [correctionSort, setCorrectionSort] = useState({ key: 'date', dir: 'desc' });
+  const [woPage, setWoPage] = useState(1);
+  const [woLimit, setWoLimit] = useState('20');
+  const [coPage, setCoPage] = useState(1);
+  const [coLimit, setCoLimit] = useState('20');
+
+  const opSortKeyMap = { id: 'id', date: 'operationDate', items: 'id', total: 'totalQuantity', note: 'note' };
+  const woSortParam = `${opSortKeyMap[writeoffSort.key] || 'operationDate'},${writeoffSort.dir}`;
+  const woPageIdx = woPage - 1;
+  const woSize = woLimit === 'all' ? 9999 : Number(woLimit);
+  const woOffset = woPageIdx * (woLimit === 'all' ? 0 : Number(woLimit));
+
+  const coSortParam = `${opSortKeyMap[correctionSort.key] || 'operationDate'},${correctionSort.dir}`;
+  const coPageIdx = coPage - 1;
+  const coSize = coLimit === 'all' ? 9999 : Number(coLimit);
+  const coOffset = coPageIdx * (coLimit === 'all' ? 0 : Number(coLimit));
 
   const productsQuery = useQuery({ queryKey: ['products', 'writeoff'], queryFn: () => services.getProducts('') });
   const operationsQuery = useQuery({
-    queryKey: ['operations', 'writeoff'],
-    queryFn: () => services.getOperations({ type: 'writeoff', limit: 20 })
+    queryKey: ['operations', 'writeoff', woLimit, woPage, writeoffSort],
+    queryFn: () => services.getOperations({ filter: 'typeCode==writeoff', page: woPageIdx, size: woSize, sort: woSortParam })
   });
   const correctionsQuery = useQuery({
-    queryKey: ['operations', 'correction'],
-    queryFn: () => services.getOperations({ type: 'correction', limit: 20 })
+    queryKey: ['operations', 'correction', coLimit, coPage, correctionSort],
+    queryFn: () => services.getOperations({ filter: 'typeCode==correction', page: coPageIdx, size: coSize, sort: coSortParam })
   });
 
   useRouteRefetch(productsQuery.refetch);
@@ -43,27 +58,6 @@ export default function WriteoffPage() {
     return String(field?.value || '').trim();
   };
 
-  const sortOperations = (operations, sort) => {
-    const getValue = (op, key) => {
-      if (key === 'id') return Number(op.id || 0);
-      if (key === 'date') return String(op.operation_date || '');
-      if (key === 'items') return Number(op.items?.length || 0);
-      if (key === 'total') return Number(op.total_quantity || 0);
-      if (key === 'note') return String(op.note || '');
-      return '';
-    };
-    return [...operations].sort((a, b) => {
-      const left = getValue(a, sort.key);
-      const right = getValue(b, sort.key);
-      const leftNum = Number(left);
-      const rightNum = Number(right);
-      const bothNum = Number.isFinite(leftNum) && Number.isFinite(rightNum) && left !== '' && right !== '';
-      const compare = bothNum
-        ? leftNum - rightNum
-        : String(left).localeCompare(String(right), 'ru', { numeric: true, sensitivity: 'base' });
-      return sort.dir === 'asc' ? compare : -compare;
-    });
-  };
 
   const createMutation = useMutation({
     mutationFn: services.createOperation,
@@ -297,26 +291,37 @@ export default function WriteoffPage() {
     createCorrectionMutation.mutate(payload);
   };
 
+  const operationsData = operationsQuery.data?.items || [];
+  const operationsTotal = Number(operationsQuery.data?.total || 0);
+  const correctionsData = correctionsQuery.data?.items || [];
+  const correctionsTotal = Number(correctionsQuery.data?.total || 0);
+
   const writeoffTotals = {
-    operations: (operationsQuery.data || []).length,
-    positions: (operationsQuery.data || []).reduce((sum, op) => sum + (Array.isArray(op.items) ? op.items.length : 0), 0),
-    quantity: (operationsQuery.data || []).reduce((sum, op) => sum + Number(op.total_quantity || 0), 0)
+    operations: operationsTotal,
+    positions: operationsData.reduce((sum, op) => sum + (Array.isArray(op.items) ? op.items.length : 0), 0),
+    quantity: operationsData.reduce((sum, op) => sum + Number(op.total_quantity || 0), 0)
   };
 
   const correctionTotals = {
-    operations: (correctionsQuery.data || []).length,
-    positions: (correctionsQuery.data || []).reduce((sum, op) => {
+    operations: correctionsTotal,
+    positions: correctionsData.reduce((sum, op) => {
       const itemsCount = Array.isArray(op.items) ? op.items.length : 0;
       if (itemsCount > 0) return sum + itemsCount;
       const diffsCount = Array.isArray(op.differences) ? op.differences.length : 0;
       return sum + diffsCount;
     }, 0),
-    quantity: (correctionsQuery.data || []).reduce((sum, op) => sum + Number(op.total_quantity || 0), 0)
+    quantity: correctionsData.reduce((sum, op) => sum + Number(op.total_quantity || 0), 0)
   };
 
+  const woTotalPages = woLimit === 'all' ? 1 : Math.max(1, Math.ceil(operationsTotal / Math.max(1, Number(woLimit))));
+  const woRangeStart = operationsTotal === 0 ? 0 : woOffset + 1;
+  const woRangeEnd = operationsTotal === 0 ? 0 : Math.min(woOffset + operationsData.length, operationsTotal);
+
+  const coTotalPages = coLimit === 'all' ? 1 : Math.max(1, Math.ceil(correctionsTotal / Math.max(1, Number(coLimit))));
+  const coRangeStart = correctionsTotal === 0 ? 0 : coOffset + 1;
+  const coRangeEnd = correctionsTotal === 0 ? 0 : Math.min(coOffset + correctionsData.length, correctionsTotal);
+
   if (productsQuery.isLoading || operationsQuery.isLoading || correctionsQuery.isLoading) return <p>Загрузка...</p>;
-  const sortedWriteoffs = sortOperations(operationsQuery.data || [], writeoffSort);
-  const sortedCorrections = sortOperations(correctionsQuery.data || [], correctionSort);
 
   return (
     <div className="stack">
@@ -333,31 +338,65 @@ export default function WriteoffPage() {
         Списаний: <strong>{writeoffTotals.operations}</strong> · Позиций: <strong>{writeoffTotals.positions}</strong> ·
         Списано шт: <strong>{writeoffTotals.quantity}</strong>
       </div>
+      <div className="toolbar history-pager">
+        <label className="history-pager-label">
+          Показывать:
+          <select className="input" value={woLimit} onChange={(e) => { setWoLimit(e.target.value); setWoPage(1); }}>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="200">200</option>
+            <option value="all">Все</option>
+          </select>
+        </label>
+        <span className="history-pager-range">{woRangeStart}-{woRangeEnd} из {operationsTotal}</span>
+        {woLimit !== 'all' && (
+          <>
+            <button className="btn" type="button" disabled={woPage <= 1} onClick={() => setWoPage((p) => Math.max(1, p - 1))}>Назад</button>
+            <span className="history-pager-range">Стр. {woPage} / {woTotalPages}</span>
+            <button className="btn" type="button" disabled={woPage >= woTotalPages} onClick={() => setWoPage((p) => Math.min(woTotalPages, p + 1))}>Вперед</button>
+          </>
+        )}
+      </div>
       <OperationsHistory
         title="История списаний"
-        operations={sortedWriteoffs}
+        operations={operationsData}
         onDelete={(id) => deleteMutation.mutate(id)}
         enableSorting
         sort={writeoffSort}
-        onSort={(key) =>
-          setWriteoffSort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
-        }
+        onSort={(key) => { setWriteoffSort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' })); setWoPage(1); }}
       />
       <div className="import-result">
         Корректировок: <strong>{correctionTotals.operations}</strong> · Позиций: <strong>{correctionTotals.positions}</strong> ·
         Объем корректировок (шт): <strong>{correctionTotals.quantity}</strong>
       </div>
+      <div className="toolbar history-pager">
+        <label className="history-pager-label">
+          Показывать:
+          <select className="input" value={coLimit} onChange={(e) => { setCoLimit(e.target.value); setCoPage(1); }}>
+            <option value="20">20</option>
+            <option value="50">50</option>
+            <option value="200">200</option>
+            <option value="all">Все</option>
+          </select>
+        </label>
+        <span className="history-pager-range">{coRangeStart}-{coRangeEnd} из {correctionsTotal}</span>
+        {coLimit !== 'all' && (
+          <>
+            <button className="btn" type="button" disabled={coPage <= 1} onClick={() => setCoPage((p) => Math.max(1, p - 1))}>Назад</button>
+            <span className="history-pager-range">Стр. {coPage} / {coTotalPages}</span>
+            <button className="btn" type="button" disabled={coPage >= coTotalPages} onClick={() => setCoPage((p) => Math.min(coTotalPages, p + 1))}>Вперед</button>
+          </>
+        )}
+      </div>
       <OperationsHistory
         title="История корректировок"
-        operations={sortedCorrections}
+        operations={correctionsData}
         onDelete={(id) => deleteMutation.mutate(id)}
         onEdit={openEditCorrection}
         canEditOperation={(op) => Array.isArray(op.items) && op.items.some((it) => Number.isFinite(Number(it?.delta)))}
         enableSorting
         sort={correctionSort}
-        onSort={(key) =>
-          setCorrectionSort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
-        }
+        onSort={(key) => { setCorrectionSort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' })); setCoPage(1); }}
       />
 
       <Modal

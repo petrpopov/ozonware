@@ -3,6 +3,9 @@ package com.ozonware.controller
 import com.ozonware.exception.BadRequestException
 import com.ozonware.service.ProductFieldsService
 import com.ozonware.service.ProductService
+import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
+import org.springframework.data.web.PageableDefault
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -14,9 +17,18 @@ class ProductController(
 ) {
 
     @GetMapping
-    fun getAll(@RequestParam(required = false) search: String?): ResponseEntity<List<Map<String, Any?>>> {
-        val products = productService.findAll(search)
-        return ResponseEntity.ok(products.map { productToMap(it) })
+    fun getAll(
+        @RequestParam(required = false) search: String?,
+        @RequestParam(required = false) page: Int?,
+        @RequestParam(required = false, defaultValue = "false") hideZeroStock: Boolean,
+        @PageableDefault(size = 20, sort = ["id"], direction = Sort.Direction.DESC)
+        pageable: Pageable
+    ): ResponseEntity<Any> {
+        if (page == null) {
+            val products = productService.findAll(search)
+            return ResponseEntity.ok(products.map { productToMap(it) })
+        }
+        return ResponseEntity.ok(productService.findAllPaged(search, hideZeroStock, pageable))
     }
 
     @GetMapping("/{id}")

@@ -8,6 +8,7 @@ import { EditIcon, TrashIcon } from '../components/Icons.jsx';
 import Modal from '../components/Modal.jsx';
 import Dropdown from '../components/Dropdown.jsx';
 import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
+import HexColorInput from '../components/HexColorInput.jsx';
 
 const emptyForm = {
   id: null,
@@ -113,7 +114,9 @@ export default function ProductsPage() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [errors, setErrors] = useState({});
-  const [showZeroStock, setShowZeroStock] = useState(false);
+  const [showZeroStock, setShowZeroStock] = useState(
+    () => localStorage.getItem('products:showZeroStock') === 'true'
+  );
   const [sort, setSort] = useState({ key: 'id', dir: 'desc' });
   const [importOpen, setImportOpen] = useState(false);
   const [importStep, setImportStep] = useState(1);
@@ -129,9 +132,18 @@ export default function ProductsPage() {
   const pushToast = useUiStore((s) => s.pushToast);
   const queryClient = useQueryClient();
 
+  const sortKeyMap = { id: 'id', name: 'name', sku: 'sku', quantity: 'quantity' };
+  const serverSort = sort.key in sortKeyMap ? `${sortKeyMap[sort.key]},${sort.dir}` : 'id,desc';
+
   const productsQuery = useQuery({
-    queryKey: ['products', search],
-    queryFn: () => services.getProducts(search),
+    queryKey: ['products', 'page', search, page, pageLimit, serverSort, showZeroStock],
+    queryFn: () => services.getProductsPage({
+      search,
+      page: page - 1,
+      size: pageLimit === 'all' ? 9999 : Number(pageLimit),
+      sort: serverSort,
+      hideZeroStock: !showZeroStock
+    }),
     placeholderData: (previousData) => previousData
   });
 
@@ -143,7 +155,6 @@ export default function ProductsPage() {
   useRouteRefetch(productsQuery.refetch);
   useRouteRefetch(fieldsQuery.refetch);
 
-  const products = productsQuery.data || [];
   const fields = useMemo(
     () =>
       (fieldsQuery.data || []).map((field) => ({
@@ -174,70 +185,32 @@ export default function ProductsPage() {
     return [...base, ...custom];
   }, [fields]);
 
-  const productsStats = useMemo(() => {
-    const totalSkus = products.length;
-    const inStockSkus = products.filter((item) => Number(item.quantity || 0) > 0).length;
-    const inStockUnits = products.reduce(
-      (sum, item) => sum + Math.max(0, Number(item.quantity || 0)),
-      0
-    );
-    return { totalSkus, inStockSkus, inStockUnits };
-  }, [products]);
-
-  const visibleProducts = useMemo(() => {
-    if (showZeroStock) {
-      return products;
-    }
-    return products.filter((item) => Number(item.quantity || 0) > 0);
-  }, [products, showZeroStock]);
-
-  const sortedProducts = useMemo(() => {
-    const list = [...visibleProducts];
-
-    const getValue = (product, key) => {
-      if (key === 'id') return product.id;
-      if (key === 'name') return product.name || '';
-      if (key === 'sku') return product.sku || '';
-      if (key === 'quantity') return Number(product.quantity || 0);
-      if (key.startsWith('custom:')) {
-        const fieldName = key.slice('custom:'.length);
-        const field = (product.custom_fields || []).find((item) => item.name === fieldName);
-        return field?.value ?? '';
-      }
-      return '';
-    };
-
-    list.sort((a, b) => {
-      const left = getValue(a, sort.key);
-      const right = getValue(b, sort.key);
-
-      const leftNumber = Number(left);
-      const rightNumber = Number(right);
-      const bothNumbers = Number.isFinite(leftNumber) && Number.isFinite(rightNumber) && left !== '' && right !== '';
-
-      let result = 0;
-      if (bothNumbers) {
-        result = leftNumber - rightNumber;
-      } else {
-        result = String(left).localeCompare(String(right), 'ru', { numeric: true, sensitivity: 'base' });
-      }
-
+  const rawItems = productsQuery.data?.items || [];
+  const pagedProducts = useMemo(() => {
+    if (!sort.key.startsWith('custom:')) return rawItems;
+    const cfName = sort.key.slice('custom:'.length);
+    return [...rawItems].sort((a, b) => {
+      const av = (a.custom_fields || []).find((f) => f.name === cfName)?.value ?? '';
+      const bv = (b.custom_fields || []).find((f) => f.name === cfName)?.value ?? '';
+      const result = String(av).localeCompare(String(bv), 'ru', { numeric: true, sensitivity: 'base' });
       return sort.dir === 'asc' ? result : -result;
     });
+  }, [rawItems, sort]);
 
-    return list;
-  }, [visibleProducts, sort]);
-
-  const totalProducts = sortedProducts.length;
-  const effectiveLimit = pageLimit === 'all' ? totalProducts || 1 : Number(pageLimit);
-  const totalPages = pageLimit === 'all' ? 1 : Math.max(1, Math.ceil(totalProducts / Math.max(1, effectiveLimit)));
-  const safePage = Math.min(page, totalPages);
-  const pageOffset = pageLimit === 'all' ? 0 : (safePage - 1) * effectiveLimit;
-  const pagedProducts = pageLimit === 'all' ? sortedProducts : sortedProducts.slice(pageOffset, pageOffset + effectiveLimit);
+  const totalProducts = Number(productsQuery.data?.total || 0);
+  const totalPages = pageLimit === 'all' ? 1 : Math.max(1, Math.ceil(totalProducts / Math.max(1, Number(pageLimit))));
+  const pageOffset = (page - 1) * (pageLimit === 'all' ? 0 : Number(pageLimit));
   const rangeStart = totalProducts === 0 ? 0 : pageOffset + 1;
   const rangeEnd = totalProducts === 0 ? 0 : Math.min(pageOffset + pagedProducts.length, totalProducts);
 
+  const productsStats = {
+    totalSkus: Number(productsQuery.data?.totalAll ?? productsQuery.data?.total ?? 0),
+    inStockSkus: Number(productsQuery.data?.inStockSkus || 0),
+    inStockUnits: Number(productsQuery.data?.totalUnits || 0)
+  };
+
   const toggleSort = (key) => {
+    setPage(1);
     setSort((prev) => {
       if (prev.key === key) {
         return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' };
@@ -251,37 +224,28 @@ export default function ProductsPage() {
     return sort.dir === 'asc' ? '↑' : '↓';
   };
 
-  const exportColumns = useMemo(
-    () => ['ID', 'Название', 'SKU', ...fieldNames, 'Остаток'],
-    [fieldNames]
-  );
-
-  const exportRows = useMemo(
-    () =>
-      sortedProducts.map((product) => {
-        const fieldMap = new Map((product.custom_fields || []).map((f) => [f.name, f.value]));
-        return [
-          product.id,
-          product.name,
-          product.sku,
-          ...fieldNames.map((fieldName) => fieldMap.get(fieldName) || ''),
-          product.quantity
-        ];
-      }),
-    [sortedProducts, fieldNames]
-  );
+  const buildExportData = async () => {
+    const allProducts = await services.getProducts(search);
+    const filtered = showZeroStock ? allProducts : allProducts.filter((p) => Number(p.quantity || 0) > 0);
+    const columns = ['ID', 'Название', 'SKU', ...fieldNames, 'Остаток'];
+    const rows = filtered.map((product) => {
+      const fieldMap = new Map((product.custom_fields || []).map((f) => [f.name, f.value]));
+      return [product.id, product.name, product.sku, ...fieldNames.map((n) => fieldMap.get(n) || ''), product.quantity];
+    });
+    return { columns, rows };
+  };
 
   const exportCsv = () => {
-    const rows = [exportColumns, ...exportRows];
-    const csv = rows.map((row) => row.map(escapeCsvCell).join(';')).join('\n');
-    downloadTextFile(`\uFEFF${csv}`, `products_${getNowStamp()}.csv`, 'text/csv;charset=utf-8;');
+    buildExportData().then(({ columns, rows }) => {
+      const csv = [columns, ...rows].map((row) => row.map(escapeCsvCell).join(';')).join('\n');
+      downloadTextFile(`\uFEFF${csv}`, `products_${getNowStamp()}.csv`, 'text/csv;charset=utf-8;');
+    }).catch((error) => pushToast(`Ошибка экспорта CSV: ${error.message}`, 'error'));
   };
 
   const exportExcel = () => {
     (async () => {
-      const XLSX = await loadXlsx();
-      const data = [exportColumns, ...exportRows];
-      const worksheet = XLSX.utils.aoa_to_sheet(data);
+      const [XLSX, { columns, rows }] = await Promise.all([loadXlsx(), buildExportData()]);
+      const worksheet = XLSX.utils.aoa_to_sheet([columns, ...rows]);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Products');
       XLSX.writeFileXLSX(workbook, `products_${getNowStamp()}.xlsx`);
@@ -471,7 +435,8 @@ export default function ProductsPage() {
         throw new Error('Необходимо сопоставить колонки SKU и Название товара');
       }
 
-      const existingSku = new Set(products.map((item) => normalizeText(item.sku)));
+      const allProducts = await services.getProducts('');
+      const existingSku = new Set(allProducts.map((item) => normalizeText(item.sku)));
       const fieldByName = new Map(fields.map((field) => [field.name, field]));
 
       let created = 0;
@@ -563,14 +528,10 @@ export default function ProductsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, showZeroStock]);
+  }, [search, showZeroStock, pageLimit]);
 
   useEffect(() => {
-    productsQuery.refetch();
-  }, [showZeroStock, pageLimit]);
-
-  useEffect(() => {
-    if (page > totalPages) {
+    if (page > totalPages && totalPages > 0) {
       setPage(totalPages);
     }
   }, [page, totalPages]);
@@ -629,6 +590,10 @@ export default function ProductsPage() {
     return <p>Загрузка...</p>;
   }
 
+  const modalPhoto = String(
+    (form.custom_fields || []).find((f) => String(f.name || '').trim() === FIELD_NAME_OZON_PHOTO)?.value || ''
+  ).trim();
+
   return (
     <section>
       <div className="toolbar">
@@ -668,7 +633,11 @@ export default function ProductsPage() {
           <input
             type="checkbox"
             checked={showZeroStock}
-            onChange={(e) => setShowZeroStock(e.target.checked)}
+            onChange={(e) => {
+              const next = e.target.checked;
+              localStorage.setItem('products:showZeroStock', String(next));
+              setShowZeroStock(next);
+            }}
           />
           Показывать товары с нулевым остатком
         </label>
@@ -704,18 +673,18 @@ export default function ProductsPage() {
             <button
               className="btn"
               type="button"
-              disabled={safePage <= 1}
+              disabled={page <= 1}
               onClick={() => setPage((prev) => Math.max(1, prev - 1))}
             >
               Назад
             </button>
             <span className="history-pager-range">
-              Стр. {safePage} / {totalPages}
+              Стр. {page} / {totalPages}
             </span>
             <button
               className="btn"
               type="button"
-              disabled={safePage >= totalPages}
+              disabled={page >= totalPages}
               onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
             >
               Вперед
@@ -853,6 +822,11 @@ export default function ProductsPage() {
         }
       >
         <form id="product-form" onSubmit={submit} className="form-grid form-grid--2col" noValidate>
+          {form.id && modalPhoto && (
+            <div className="form-grid-item--full modal-photo-preview">
+              <img src={modalPhoto} alt={form.name || 'product'} className="modal-photo-thumb" loading="lazy" />
+            </div>
+          )}
           <label>
             Название*
             <input
@@ -928,10 +902,26 @@ export default function ProductsPage() {
                       </option>
                     ))}
                   </select>
+                ) : field.type === 'color' ? (
+                  <HexColorInput
+                    className={`input ${errors[errorKey] ? 'input-error' : ''}`}
+                    value={value}
+                    onChange={(nextValue) => {
+                      setForm((s) => ({
+                        ...s,
+                        custom_fields: (s.custom_fields || []).map((item, itemIdx) =>
+                          itemIdx === idx ? { ...item, value: nextValue } : item
+                        )
+                      }));
+                      if (errors[errorKey] && String(nextValue).trim()) {
+                        setErrors((prev) => ({ ...prev, [errorKey]: undefined }));
+                      }
+                    }}
+                  />
                 ) : (
                   <input
                     className={`input ${errors[errorKey] ? 'input-error' : ''}`}
-                    type={field.type === 'number' ? 'number' : field.type === 'color' ? 'color' : 'text'}
+                    type={field.type === 'number' ? 'number' : 'text'}
                     value={value}
                     onChange={(e) => {
                       const nextValue = e.target.value;

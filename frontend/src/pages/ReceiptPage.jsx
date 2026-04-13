@@ -94,7 +94,7 @@ export default function ReceiptPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  const [historySort, setHistorySort] = useState({ key: 'id', dir: 'desc' });
+  const [historySort, setHistorySort] = useState({ key: 'date', dir: 'desc' });
   const [editForm, setEditForm] = useState({ id: null, operation_date: '', note: '', items: [] });
 
   const resetImportState = () => {
@@ -119,15 +119,21 @@ export default function ReceiptPage() {
   };
 
   const productsQuery = useQuery({ queryKey: ['products', 'receipt'], queryFn: () => services.getProducts('') });
-  const operationsOffset = historyLimit === 'all' ? 0 : (historyPage - 1) * Number(historyLimit);
+
+  const receiptSortKeyMap = { id: 'id', date: 'operationDate', items: 'id', total: 'totalQuantity', note: 'note' };
+  const operationsSort = `${receiptSortKeyMap[historySort.key] || 'operationDate'},${historySort.dir}`;
+  const operationsPage = historyPage - 1;
+  const operationsSize = historyLimit === 'all' ? 9999 : Number(historyLimit);
+  const operationsOffset = operationsPage * (historyLimit === 'all' ? 0 : Number(historyLimit));
+
   const operationsQuery = useQuery({
-    queryKey: ['operations', 'receipt', historyLimit, operationsOffset],
+    queryKey: ['operations', 'receipt', historyLimit, historyPage, historySort],
     queryFn: () =>
       services.getOperations({
-        type: 'receipt',
-        limit: historyLimit,
-        offset: operationsOffset,
-        includeTotal: true
+        filter: 'typeCode==receipt',
+        page: operationsPage,
+        size: operationsSize,
+        sort: operationsSort
       })
   });
 
@@ -141,27 +147,6 @@ export default function ReceiptPage() {
     historyLimit === 'all' ? 1 : Math.max(1, Math.ceil(operationsTotal / Math.max(1, effectiveLimit)));
   const rangeStart = operationsTotal === 0 ? 0 : operationsOffset + 1;
   const rangeEnd = operationsTotal === 0 ? 0 : Math.min(operationsOffset + operationsData.length, operationsTotal);
-  const sortedOperations = useMemo(() => {
-    const getValue = (op, key) => {
-      if (key === 'id') return Number(op.id || 0);
-      if (key === 'date') return String(op.operation_date || '');
-      if (key === 'items') return Number(op.items?.length || 0);
-      if (key === 'total') return Number(op.total_quantity || 0);
-      if (key === 'note') return String(op.note || '');
-      return '';
-    };
-    return [...operationsData].sort((a, b) => {
-      const left = getValue(a, historySort.key);
-      const right = getValue(b, historySort.key);
-      const leftNum = Number(left);
-      const rightNum = Number(right);
-      const bothNum = Number.isFinite(leftNum) && Number.isFinite(rightNum) && left !== '' && right !== '';
-      const compare = bothNum
-        ? leftNum - rightNum
-        : String(left).localeCompare(String(right), 'ru', { numeric: true, sensitivity: 'base' });
-      return historySort.dir === 'asc' ? compare : -compare;
-    });
-  }, [operationsData, historySort]);
 
   const createMutation = useMutation({
     mutationFn: services.createOperation,
@@ -499,14 +484,15 @@ export default function ReceiptPage() {
       </div>
       <OperationsHistory
         title="История приходов"
-        operations={sortedOperations}
+        operations={operationsData}
         onEdit={openEditModal}
         onDelete={(id) => deleteMutation.mutate(id)}
         enableSorting
         sort={historySort}
-        onSort={(key) =>
-          setHistorySort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }))
-        }
+        onSort={(key) => {
+          setHistorySort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+          setHistoryPage(1);
+        }}
         emptyMessage="Нет операций приёмки"
         emptySubtext="Создайте первую операцию, чтобы начать учёт поступлений"
       />

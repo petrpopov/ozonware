@@ -66,7 +66,7 @@ export default function ReportsPage() {
   const [importPreview, setImportPreview] = useState([]);
 
   const statsQuery = useQuery({ queryKey: ['stats'], queryFn: services.getStats });
-  const operationsQuery = useQuery({ queryKey: ['operations', 'recent'], queryFn: () => services.getOperations({ limit: 20 }) });
+  const operationsQuery = useQuery({ queryKey: ['operations', 'recent'], queryFn: () => services.getOperations({ page: 0, size: 20, sort: 'operationDate,desc' }) });
   const importsQuery = useQuery({ queryKey: ['ozon-order-imports'], queryFn: () => services.getOzonOrderImports(30) });
 
   const importMutation = useMutation({
@@ -271,7 +271,7 @@ export default function ReportsPage() {
               </tr>
             </thead>
             <tbody>
-              {(operationsQuery.data || []).map((op) => (
+              {(operationsQuery.data?.items || []).map((op) => (
                 <tr key={op.id}>
                   <td>{op.id}</td>
                   <td>{op.type_code}</td>

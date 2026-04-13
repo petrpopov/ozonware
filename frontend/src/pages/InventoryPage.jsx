@@ -43,12 +43,20 @@ export default function InventoryPage() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState('');
   const [selectedHistoryId, setSelectedHistoryId] = useState(null);
-  const [historySort, setHistorySort] = useState({ key: 'id', dir: 'desc' });
+  const [historySort, setHistorySort] = useState({ key: 'date', dir: 'desc' });
+  const [invPage, setInvPage] = useState(1);
+  const [invLimit, setInvLimit] = useState('20');
+
+  const invSortKeyMap = { id: 'id', date: 'operationDate', diffs: 'totalQuantity', note: 'note' };
+  const invSortParam = `${invSortKeyMap[historySort.key] || 'operationDate'},${historySort.dir}`;
+  const invPageIdx = invPage - 1;
+  const invSize = invLimit === 'all' ? 9999 : Number(invLimit);
+  const invOffset = invPageIdx * (invLimit === 'all' ? 0 : Number(invLimit));
 
   const productsQuery = useQuery({ queryKey: ['products', 'inventory'], queryFn: () => services.getProducts('') });
   const historyQuery = useQuery({
-    queryKey: ['operations', 'inventory'],
-    queryFn: () => services.getOperations({ type: 'inventory', limit: 20 })
+    queryKey: ['operations', 'inventory', invLimit, invPage, historySort],
+    queryFn: () => services.getOperations({ filter: 'typeCode==inventory', page: invPageIdx, size: invSize, sort: invSortParam })
   });
   const historyDetailsQuery = useQuery({
     queryKey: ['operation', selectedHistoryId],
@@ -206,27 +214,11 @@ export default function InventoryPage() {
     };
   }, [boxes, currentBox, totalByProduct]);
 
-  const sortedHistory = useMemo(() => {
-    const list = [...(historyQuery.data || [])];
-    const getValue = (op) => {
-      if (historySort.key === 'id') return Number(op.id || 0);
-      if (historySort.key === 'date') return String(op.operation_date || '');
-      if (historySort.key === 'diffs') return Number(op.differences?.length || 0);
-      if (historySort.key === 'note') return String(op.note || '');
-      return '';
-    };
-    return list.sort((a, b) => {
-      const left = getValue(a);
-      const right = getValue(b);
-      const leftNum = Number(left);
-      const rightNum = Number(right);
-      const bothNum = Number.isFinite(leftNum) && Number.isFinite(rightNum) && left !== '' && right !== '';
-      const compare = bothNum
-        ? leftNum - rightNum
-        : String(left).localeCompare(String(right), 'ru', { numeric: true, sensitivity: 'base' });
-      return historySort.dir === 'asc' ? compare : -compare;
-    });
-  }, [historyQuery.data, historySort]);
+  const historyData = historyQuery.data?.items || [];
+  const historyTotal = Number(historyQuery.data?.total || 0);
+  const invTotalPages = invLimit === 'all' ? 1 : Math.max(1, Math.ceil(historyTotal / Math.max(1, Number(invLimit))));
+  const invRangeStart = historyTotal === 0 ? 0 : invOffset + 1;
+  const invRangeEnd = historyTotal === 0 ? 0 : Math.min(invOffset + historyData.length, historyTotal);
 
   const processScannerSubmit = () => {
     const raw = scanQuery.trim();
@@ -348,22 +340,22 @@ export default function InventoryPage() {
           <table className="table compact">
             <thead>
               <tr>
-                <th className="sortable" onClick={() => setHistorySort((p) => (p.key === 'id' ? { key: 'id', dir: p.dir === 'asc' ? 'desc' : 'asc' } : { key: 'id', dir: 'asc' }))}>
+                <th className="sortable" onClick={() => { setInvPage(1); setHistorySort((p) => (p.key === 'id' ? { key: 'id', dir: p.dir === 'asc' ? 'desc' : 'asc' } : { key: 'id', dir: 'asc' })); }}>
                   ID <span>{historySort.key === 'id' ? (historySort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
                 </th>
-                <th className="sortable" onClick={() => setHistorySort((p) => (p.key === 'date' ? { key: 'date', dir: p.dir === 'asc' ? 'desc' : 'asc' } : { key: 'date', dir: 'asc' }))}>
+                <th className="sortable" onClick={() => { setInvPage(1); setHistorySort((p) => (p.key === 'date' ? { key: 'date', dir: p.dir === 'asc' ? 'desc' : 'asc' } : { key: 'date', dir: 'asc' })); }}>
                   Дата <span>{historySort.key === 'date' ? (historySort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
                 </th>
-                <th className="sortable" onClick={() => setHistorySort((p) => (p.key === 'diffs' ? { key: 'diffs', dir: p.dir === 'asc' ? 'desc' : 'asc' } : { key: 'diffs', dir: 'asc' }))}>
+                <th className="sortable" onClick={() => { setInvPage(1); setHistorySort((p) => (p.key === 'diffs' ? { key: 'diffs', dir: p.dir === 'asc' ? 'desc' : 'asc' } : { key: 'diffs', dir: 'asc' })); }}>
                   Расхождений <span>{historySort.key === 'diffs' ? (historySort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
                 </th>
-                <th className="sortable" onClick={() => setHistorySort((p) => (p.key === 'note' ? { key: 'note', dir: p.dir === 'asc' ? 'desc' : 'asc' } : { key: 'note', dir: 'asc' }))}>
+                <th className="sortable" onClick={() => { setInvPage(1); setHistorySort((p) => (p.key === 'note' ? { key: 'note', dir: p.dir === 'asc' ? 'desc' : 'asc' } : { key: 'note', dir: 'asc' })); }}>
                   Примечание <span>{historySort.key === 'note' ? (historySort.dir === 'asc' ? '↑' : '↓') : '↕'}</span>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {sortedHistory.map((op) => (
+              {historyData.map((op) => (
                 <tr key={op.id} className="row-clickable" onClick={() => setSelectedHistoryId(op.id)}>
                   <td>{op.id}</td>
                   <td>{(op.operation_date || '').slice(0, 10)}</td>
@@ -375,6 +367,21 @@ export default function InventoryPage() {
               ))}
             </tbody>
           </table>
+        </div>
+        <div className="pagination-bar">
+          <label className="pagination-label">
+            Показывать
+            <select className="select-sm" value={invLimit} onChange={(e) => { setInvPage(1); setInvLimit(e.target.value); }}>
+              {['10', '20', '50', '100', 'all'].map((v) => <option key={v} value={v}>{v === 'all' ? 'Все' : v}</option>)}
+            </select>
+          </label>
+          {historyTotal > 0 && (
+            <span className="pagination-range">{invRangeStart}–{invRangeEnd} из {historyTotal}</span>
+          )}
+          <div className="pagination-controls">
+            <button className="btn btn-sm" disabled={invPage <= 1} onClick={() => setInvPage((p) => p - 1)}>Назад</button>
+            <button className="btn btn-sm" disabled={invPage >= invTotalPages} onClick={() => setInvPage((p) => p + 1)}>Вперед</button>
+          </div>
         </div>
       </section>
 

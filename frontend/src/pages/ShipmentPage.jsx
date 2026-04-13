@@ -80,7 +80,7 @@ export default function ShipmentPage() {
   const [historyLimit, setHistoryLimit] = useState('20');
   const [historyPage, setHistoryPage] = useState(1);
   const [shipmentFilter, setShipmentFilter] = useState('all');
-  const [historySort, setHistorySort] = useState({ key: 'id', dir: 'desc' });
+  const [historySort, setHistorySort] = useState({ key: 'date', dir: 'desc' });
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editLoading, setEditLoading] = useState(false);
@@ -110,16 +110,25 @@ export default function ShipmentPage() {
   const fboSourceRef = useRef(null);
 
   const productsQuery = useQuery({ queryKey: ['products', 'shipment'], queryFn: () => services.getProducts('') });
-  const operationsOffset = historyLimit === 'all' ? 0 : (historyPage - 1) * Number(historyLimit);
+
+  const sortKeyMap = { id: 'id', date: 'operationDate', total: 'totalQuantity', note: 'note', opType: 'channelCode' };
+  const operationsSort = `${sortKeyMap[historySort.key] || 'operationDate'},${historySort.dir}`;
+  const channelMap = { fbs: 'ozon_fbs', fbo: 'ozon_fbo', manual: 'manual' };
+  const filterParts = ['typeCode==shipment'];
+  if (shipmentFilter !== 'all') filterParts.push(`channelCode==${channelMap[shipmentFilter]}`);
+  const operationsFilter = filterParts.join(';');
+  const operationsPage = historyPage - 1;
+  const operationsSize = historyLimit === 'all' ? 9999 : Number(historyLimit);
+  const operationsOffset = operationsPage * (historyLimit === 'all' ? 0 : Number(historyLimit));
+
   const operationsQuery = useQuery({
-    queryKey: ['operations', 'shipment', historyLimit, operationsOffset, shipmentFilter],
+    queryKey: ['operations', 'shipment', historyLimit, historyPage, shipmentFilter, historySort],
     queryFn: () =>
       services.getOperations({
-        type: 'shipment',
-        limit: historyLimit,
-        offset: operationsOffset,
-        includeTotal: true,
-        shipmentKind: shipmentFilter
+        filter: operationsFilter,
+        page: operationsPage,
+        size: operationsSize,
+        sort: operationsSort
       })
   });
 
@@ -148,32 +157,9 @@ export default function ShipmentPage() {
     return 'Ручная';
   };
 
-  const sortedOperations = useMemo(() => {
-    const getValue = (op, key) => {
-      if (key === 'id') return Number(op.id || 0);
-      if (key === 'date') return String(op.operation_date || '');
-      if (key === 'opType') return resolveShipmentKindLabel(op);
-      if (key === 'items') return Number(op.items?.length || 0);
-      if (key === 'total') return Number(op.total_quantity || 0);
-      if (key === 'note') return String(op.note || '');
-      return '';
-    };
-
-    return [...operationsData].sort((a, b) => {
-      const left = getValue(a, historySort.key);
-      const right = getValue(b, historySort.key);
-      const leftNum = Number(left);
-      const rightNum = Number(right);
-      const bothNum = Number.isFinite(leftNum) && Number.isFinite(rightNum) && left !== '' && right !== '';
-      const compare = bothNum
-        ? leftNum - rightNum
-        : String(left).localeCompare(String(right), 'ru', { numeric: true, sensitivity: 'base' });
-      return historySort.dir === 'asc' ? compare : -compare;
-    });
-  }, [operationsData, historySort]);
-
   const toggleSort = (key) => {
     setHistorySort((prev) => (prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }));
+    setHistoryPage(1);
   };
 
   const createMutation = useMutation({
@@ -831,7 +817,7 @@ export default function ShipmentPage() {
       </div>
       <OperationsHistory
         title="История отгрузок"
-        operations={sortedOperations}
+        operations={operationsData}
         onDelete={(id) => deleteMutation.mutate(id)}
         onEdit={openEditModal}
         canEditOperation={(operation) => resolveShipmentKind(operation) === 'manual'}

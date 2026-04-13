@@ -5,6 +5,7 @@ import { services } from '../api/services.js';
 import { useUiStore } from '../store/useUiStore.js';
 import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
 import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
+import HexColorInput from '../components/HexColorInput.jsx';
 
 const emptyForm = {
   id: null,
@@ -264,10 +265,23 @@ export default function ProductCardPage() {
                       </option>
                     ))}
                   </select>
+                ) : field.type === 'color' ? (
+                  <HexColorInput
+                    className={`input ${errors[errorKey] ? 'input-error' : ''}`}
+                    value={value}
+                    onChange={(nextValue) =>
+                      setForm((s) => ({
+                        ...s,
+                        custom_fields: (s.custom_fields || []).map((item, itemIdx) =>
+                          itemIdx === idx ? { ...item, value: nextValue } : item
+                        )
+                      }))
+                    }
+                  />
                 ) : (
                   <input
                     className={`input ${errors[errorKey] ? 'input-error' : ''}`}
-                    type={field.type === 'number' ? 'number' : field.type === 'color' ? 'color' : 'text'}
+                    type={field.type === 'number' ? 'number' : 'text'}
                     value={value}
                     onChange={(e) =>
                       setForm((s) => ({

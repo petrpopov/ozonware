@@ -13,18 +13,18 @@ export const services = {
   updateProductField: (id, payload) => api.put(`/product-fields/${id}`, payload),
   deleteProductField: (id) => api.del(`/product-fields/${id}`),
 
-  getOperations: ({ type, limit, offset, includeTotal, shipmentKind } = {}) => {
-    const params = new URLSearchParams();
-    if (type) params.set('type', type);
-    if (limit) params.set('limit', String(limit));
-    if (offset) params.set('offset', String(offset));
-    if (includeTotal) params.set('include_total', '1');
-    if (type === 'shipment' && shipmentKind && shipmentKind !== 'all') {
-      params.set('shipment_kind', String(shipmentKind));
-    }
-    const query = params.toString();
-    return api.get(`/operations${query ? `?${query}` : ''}`);
+  getOperations: ({ filter, page = 0, size = 20, sort = 'operationDate,desc' } = {}) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size), sort });
+    if (filter) params.set('filter', filter);
+    return api.get(`/operations?${params}`);
   },
+  getProductsPage: ({ search = '', page = 0, size = 20, sort = 'id,desc', hideZeroStock = false } = {}) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size), sort });
+    if (search) params.set('search', search);
+    if (hideZeroStock) params.set('hideZeroStock', 'true');
+    return api.get(`/products?${params}`);
+  },
+
   getOperationById: (id) => api.get(`/operations/${id}`),
   createOperation: (payload) => api.post('/operations', payload),
   updateOperation: (id, payload) => api.put(`/operations/${id}`, payload),

@@ -6,7 +6,9 @@ import com.ozonware.exception.ResourceNotFoundException
 import com.ozonware.repository.OperationInventoryDiffRepository
 import com.ozonware.repository.OperationItemRepository
 import com.ozonware.repository.OperationRepository
-import jakarta.persistence.EntityManager
+import io.github.perplexhub.rsql.RSQLJPASupport
+import org.springframework.data.domain.Pageable
+import org.springframework.data.jpa.domain.Specification
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -17,64 +19,21 @@ class OperationService(
     private val operationRepository: OperationRepository,
     private val operationsWriterService: OperationsWriterService,
     private val operationItemRepository: OperationItemRepository,
-    private val operationInventoryDiffRepository: OperationInventoryDiffRepository,
-    private val entityManager: EntityManager
+    private val operationInventoryDiffRepository: OperationInventoryDiffRepository
 ) {
 
-    fun findAll(
-        type: String? = null,
-        limit: String? = null,
-        offset: String? = null,
-        includeTotal: Boolean = false,
-        shipmentKind: String? = null
-    ): Any {
-        val whereParts = mutableListOf<String>()
-        val params = mutableListOf<Any>()
-
-        if (type != null) {
-            whereParts += "type_code = ?"
-            params += type
-        }
-
-        val sk = shipmentKind?.lowercase()
-        if (type == "shipment" && sk in listOf("fbs", "fbo", "manual")) {
-            when (sk) {
-                "fbs"    -> { whereParts += "channel_code = ?"; params += "ozon_fbs" }
-                "fbo"    -> { whereParts += "channel_code = ?"; params += "ozon_fbo" }
-                "manual" -> { whereParts += "channel_code = ?"; params += "manual"   }
-            }
-        }
-
-        val whereClause = if (whereParts.isNotEmpty()) "WHERE " + whereParts.joinToString(" AND ") else ""
-        val parsedLimit = limit?.lowercase()?.let { if (it == "all") null else it.toIntOrNull() }
-        val parsedOffset = offset?.toIntOrNull() ?: 0
-        val safeOffset = if (parsedOffset > 0) parsedOffset else 0
-        val usePagination = parsedLimit != null && parsedLimit > 0
-
-        val queryStr = "SELECT * FROM operations $whereClause ORDER BY created_at DESC" +
-                if (usePagination) " LIMIT ? OFFSET ?" else ""
-
-        val queryParams = params.toMutableList()
-        if (usePagination) { queryParams += parsedLimit!!; queryParams += safeOffset }
-
-        val nativeQuery = entityManager.createNativeQuery(queryStr, Operation::class.java)
-        queryParams.forEachIndexed { i, p -> nativeQuery.setParameter(i + 1, p) }
-
-        @Suppress("UNCHECKED_CAST")
-        val results = nativeQuery.resultList as List<Operation>
-
-        if (!includeTotal) return results.map { operationToMap(it) }
-
-        val countStr = "SELECT COUNT(*)::int AS total FROM operations $whereClause"
-        val countQuery = entityManager.createNativeQuery(countStr)
-        params.forEachIndexed { i, p -> countQuery.setParameter(i + 1, p) }
-        val total = (countQuery.singleResult as Number).toInt()
+    fun findAll(filter: String?, pageable: Pageable): Map<String, Any?> {
+        val spec: Specification<Operation>? = filter?.let { RSQLJPASupport.toSpecification(it) }
+        val page = if (spec != null)
+            operationRepository.findAll(spec, pageable)
+        else
+            operationRepository.findAll(pageable)
 
         return mapOf(
-            "items" to results.map { operationToMap(it) },
-            "total" to total,
-            "limit" to if (usePagination) parsedLimit else null,
-            "offset" to if (usePagination) safeOffset else 0
+            "items"  to page.content.map { operationToMap(it) },
+            "total"  to page.totalElements.toInt(),
+            "limit"  to pageable.pageSize,
+            "offset" to (pageable.pageNumber * pageable.pageSize)
         )
     }
 

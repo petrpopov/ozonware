@@ -26,6 +26,8 @@ dependencies {
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("io.hypersistence:hypersistence-utils-hibernate-63:3.9.0")
 
+    implementation("io.github.perplexhub:rsql-jpa-spring-boot-starter:6.0.33")
+
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     implementation("com.google.api-client:google-api-client:2.7.0")
