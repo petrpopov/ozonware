@@ -1,7 +1,9 @@
 package com.ozonware.dto.ozon
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class OzonFboOrderDto(
     @JsonProperty("order_id") val orderId: Long? = null,
     @JsonProperty("order_number") val orderNumber: String? = null,
@@ -10,6 +12,7 @@ data class OzonFboOrderDto(
     @JsonProperty("state_updated_date") val stateUpdatedDate: String? = null
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class OzonFboWarehouseDto(
     @JsonProperty("arrival_date") val arrivalDate: String? = null,
     @JsonProperty("warehouse_id") val warehouseId: Long? = null,
@@ -17,6 +20,7 @@ data class OzonFboWarehouseDto(
     val address: String? = null
 )
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class OzonFboSupplyNodeDto(
     @JsonProperty("bundle_id") val bundleId: String? = null,
     @JsonProperty("supply_id") val supplyId: Long? = null,
@@ -34,6 +38,7 @@ data class OzonFboSupplyDto(
     val bundleId: String get() = supply.bundleId ?: ""
 }
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 data class OzonFboSupplyItemDto(
     val sku: String = "",
     @JsonProperty("offer_id") val offerId: String? = null,
