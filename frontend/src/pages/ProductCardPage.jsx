@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { services } from '../api/services.js';
 import { useUiStore } from '../store/useUiStore.js';
 import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
-import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
+import { FIELD_KIND_OZON_SKU, FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
 import HexColorInput from '../components/HexColorInput.jsx';
 
 const emptyForm = {
@@ -76,11 +76,13 @@ export default function ProductCardPage() {
 
   const fields = useMemo(
     () =>
-      (fieldsQuery.data || []).map((field) => ({
-        ...field,
-        required: !!field.required,
-        options: Array.isArray(field.options) ? field.options : []
-      })),
+      (fieldsQuery.data || [])
+        .filter((f) => f.kind !== FIELD_KIND_OZON_SKU)
+        .map((field) => ({
+          ...field,
+          required: !!field.required,
+          options: Array.isArray(field.options) ? field.options : []
+        })),
     [fieldsQuery.data]
   );
 
