@@ -64,7 +64,7 @@ export default function PlannedSuppliesPage() {
   });
 
   const filtered = useMemo(() => {
-    const raw = suppliesQuery.data?.items || suppliesQuery.data || [];
+    const raw = suppliesQuery.data?.content || [];
     if (statusFilter === 'all') return raw;
     return raw.filter((s) => s.status === statusFilter);
   }, [suppliesQuery.data, statusFilter]);

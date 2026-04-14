@@ -60,9 +60,9 @@ export default function PlannedSupplyDetailPage() {
 
   // Build fact quantities map from receipts
   const factBySkuFromReceipts = useMemo(() => {
-    if (!supply?.receipts?.length) return {};
+    if (!supply?.operations?.length) return {};
     const map = {};
-    for (const receipt of supply.receipts) {
+    for (const receipt of supply.operations) {
       const receiptItems = receipt.items || receipt.corrections || [];
       for (const item of receiptItems) {
         const sku = item.sku || item.productSKU || item.product_sku;
@@ -92,7 +92,7 @@ export default function PlannedSupplyDetailPage() {
   }
 
   const items = supply.items || [];
-  const receipts = supply.receipts || [];
+  const receipts = supply.operations || [];
 
   return (
     <div className="stack">

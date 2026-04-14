@@ -5,6 +5,7 @@ import { services } from '../api/services.js';
 import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
 import { useUiStore } from '../store/useUiStore.js';
 import OperationBuilder from '../components/OperationBuilder.jsx';
+import ReceiptBoxWizard from '../components/ReceiptBoxWizard.jsx';
 import OperationsHistory from '../components/OperationsHistory.jsx';
 import Modal from '../components/Modal.jsx';
 import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
@@ -97,6 +98,7 @@ export default function ReceiptPage() {
   const [availablePlansForImport, setAvailablePlansForImport] = useState([]);
   const [importOpen, setImportOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [receiptMode, setReceiptMode] = useState('normal');
   const [editOpen, setEditOpen] = useState(false);
   const [historySort, setHistorySort] = useState({ key: 'date', dir: 'desc' });
   const [editForm, setEditForm] = useState({ id: null, operation_date: '', note: '', items: [], plannedSupplyId: null, corrections: [] });
@@ -136,6 +138,13 @@ export default function ReceiptPage() {
   };
 
   const productsQuery = useQuery({ queryKey: ['products', 'receipt'], queryFn: () => services.getProducts('') });
+
+  const boxSizeQuery = useQuery({
+    queryKey: ['app-setting', 'receipt_default_box_size'],
+    queryFn: () => services.getAppSetting('receipt_default_box_size'),
+    staleTime: 60_000
+  });
+  const globalBoxSize = parseInt(boxSizeQuery.data?.value, 10) || 10;
 
   const receiptSortKeyMap = { id: 'id', date: 'operationDate', items: 'id', total: 'totalQuantity', note: 'note' };
   const operationsSort = `${receiptSortKeyMap[historySort.key] || 'operationDate'},${historySort.dir}`;
@@ -564,21 +573,47 @@ export default function ReceiptPage() {
 
       <Modal
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={() => { setAddOpen(false); setReceiptMode('normal'); }}
         title="Новый приход"
-        size="lg"
+        size={receiptMode === 'boxes' ? 'xl' : 'lg'}
         footer={
-          <button className="btn-cancel" type="button" onClick={() => setAddOpen(false)}>
+          <button className="btn-cancel" type="button" onClick={() => { setAddOpen(false); setReceiptMode('normal'); }}>
             Закрыть
           </button>
         }
       >
-        <OperationBuilder
-          type="receipt"
-          products={productsQuery.data || []}
-          onSubmit={(payload) => createMutation.mutate(payload)}
-          loading={createMutation.isPending}
-        />
+        <div className="segment-control" style={{ marginBottom: '1rem' }}>
+          <button
+            type="button"
+            className={`btn${receiptMode === 'normal' ? ' btn-primary' : ''}`}
+            onClick={() => setReceiptMode('normal')}
+          >
+            Обычный
+          </button>
+          <button
+            type="button"
+            className={`btn${receiptMode === 'boxes' ? ' btn-primary' : ''}`}
+            onClick={() => setReceiptMode('boxes')}
+          >
+            По коробкам
+          </button>
+        </div>
+        {receiptMode === 'normal' && (
+          <OperationBuilder
+            type="receipt"
+            products={productsQuery.data || []}
+            onSubmit={(payload) => createMutation.mutate(payload)}
+            loading={createMutation.isPending}
+          />
+        )}
+        {receiptMode === 'boxes' && (
+          <ReceiptBoxWizard
+            products={productsQuery.data || []}
+            globalBoxSize={globalBoxSize}
+            onSubmit={(payload) => createMutation.mutate(payload)}
+            loading={createMutation.isPending}
+          />
+        )}
       </Modal>
 
       <Modal
