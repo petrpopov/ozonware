@@ -42,7 +42,7 @@ class PlannedSupplyService(
             PlannedSupply(
                 title = req.title,
                 supplier = req.supplier,
-                plannedDate = req.plannedDate?.let { LocalDate.parse(it) },
+                plannedDate = req.plannedDate?.let { dateStr -> LocalDate.parse(dateStr) },
                 note = req.note,
                 sourceFile = req.sourceFile,
                 status = STATUS_PLANNED,
@@ -121,7 +121,7 @@ class PlannedSupplyService(
 
         supply.title = req.title
         supply.supplier = req.supplier
-        supply.plannedDate = req.plannedDate?.let { LocalDate.parse(it) }
+        supply.plannedDate = req.plannedDate?.let { dateStr -> LocalDate.parse(dateStr) }
         supply.note = req.note
         supply.sourceFile = req.sourceFile
         supply.updatedAt = LocalDateTime.now()
