@@ -179,7 +179,10 @@ class PlannedSupplyService(
     fun recalcStatus(id: Long) {
         val supply = plannedSupplyRepository.findById(id).orElse(null) ?: return
 
-        if (supply.status == STATUS_CLOSED) return
+        if (supply.status == STATUS_CLOSED) {
+
+            return
+        }
 
         val operations = operationRepository.findByPlannedSupplyId(id)
         if (operations.isEmpty()) {
@@ -192,7 +195,10 @@ class PlannedSupplyService(
         }
 
         val items = plannedSupplyItemRepository.findAllByPlannedSupplyId(id)
-        if (items.isEmpty()) return
+        if (items.isEmpty()) {
+
+            return
+        }
 
         // Aggregate factual quantities by SKU from all linked operations and their corrections
         val directOpIds = operations.mapNotNull { op -> op.id }
