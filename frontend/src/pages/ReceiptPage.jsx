@@ -91,6 +91,8 @@ export default function ReceiptPage() {
   const [quantityColumn, setQuantityColumn] = useState('');
   const [importDate, setImportDate] = useState(new Date().toISOString().slice(0, 10));
   const [importError, setImportError] = useState('');
+  const [importPlanId, setImportPlanId] = useState(null);
+  const [availablePlansForImport, setAvailablePlansForImport] = useState([]);
   const [importOpen, setImportOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -106,11 +108,16 @@ export default function ReceiptPage() {
     setQuantityColumn('');
     setImportDate(new Date().toISOString().slice(0, 10));
     setImportError('');
+    setImportPlanId(null);
+    setAvailablePlansForImport([]);
   };
 
   const openImportModal = () => {
     resetImportState();
     setImportOpen(true);
+    services.getPlannedSupplies({ includeClosed: false }).then((res) => {
+      setAvailablePlansForImport(Array.isArray(res) ? res : (res?.content || []));
+    }).catch(() => {});
   };
 
   const closeImportModal = () => {
@@ -421,7 +428,8 @@ export default function ReceiptPage() {
       operation_date: importDate,
       note: `Приход от ${importDate} (Excel: ${importFileName})`,
       total_quantity: totalQuantity,
-      items
+      items,
+      planned_supply_id: importPlanId
     });
   };
 
@@ -595,6 +603,24 @@ export default function ReceiptPage() {
             </div>
 
             {importFileName && <div className="import-file-name">Файл: {importFileName}</div>}
+
+            {/* Plan linkage */}
+            <div style={{ marginBottom: 'var(--space-3)' }}>
+              <label className="field-label" style={{ marginBottom: 'var(--space-1)', display: 'block' }}>
+                Привязать к плану (необязательно)
+              </label>
+              <select
+                className="input"
+                value={importPlanId || ''}
+                onChange={(e) => setImportPlanId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">— Без привязки —</option>
+                {availablePlansForImport.map((plan) => (
+                  <option key={plan.id} value={plan.id}>{plan.title} {plan.planned_date ? `(${plan.planned_date})` : ''}</option>
+                ))}
+              </select>
+            </div>
+
             {skuColumnIndex < 0 && importHeaders.length > 0 && (
               <div className="import-error">В выбранном листе не найдена колонка SKU</div>
             )}
