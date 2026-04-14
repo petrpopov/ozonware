@@ -5,9 +5,12 @@ import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 import org.springframework.data.repository.query.Param
 import org.springframework.stereotype.Repository
+import java.util.Optional
 
 @Repository
 interface ProductRepository : JpaRepository<Product, Long> {
+
+    fun findBySku(sku: String): Optional<Product>
 
     @Query(value = "SELECT DISTINCT p.* FROM products p " +
         "LEFT JOIN product_field_values pfv ON pfv.product_id = p.id " +

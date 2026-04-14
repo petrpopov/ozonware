@@ -9,6 +9,8 @@ import InventoryPage from './pages/InventoryPage.jsx';
 import ReportsPage from './pages/ReportsPage.jsx';
 import SettingsPage from './pages/SettingsPage.jsx';
 import ProductCardPage from './pages/ProductCardPage.jsx';
+import PlannedSuppliesPage from './pages/PlannedSuppliesPage.jsx';
+import PlannedSupplyDetailPage from './pages/PlannedSupplyDetailPage.jsx';
 
 export default function App() {
   return (
@@ -19,6 +21,8 @@ export default function App() {
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/products/:id" element={<ProductCardPage />} />
           <Route path="/receipt" element={<ReceiptPage />} />
+          <Route path="/planned-supplies" element={<PlannedSuppliesPage />} />
+          <Route path="/planned-supplies/:id" element={<PlannedSupplyDetailPage />} />
           <Route path="/shipment" element={<ShipmentPage />} />
           <Route path="/writeoff" element={<WriteoffPage />} />
           <Route path="/inventory" element={<InventoryPage />} />

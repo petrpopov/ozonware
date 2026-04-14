@@ -40,7 +40,21 @@ class OperationService(
 
     fun findById(id: Long): Map<String, Any?> {
         val op = operationRepository.findById(id).orElseThrow { ResourceNotFoundException("Operation not found") }
-        return operationToMap(op)
+        val corrections = operationRepository.findByParentOperationId(id)
+
+        return operationToMap(op) + mapOf(
+            "planned_supply_id" to op.plannedSupplyId,
+            "corrections" to corrections.map { corr ->
+                mapOf(
+                    "id" to corr.id,
+                    "type_code" to corr.typeCode,
+                    "operation_date" to corr.operationDate?.toString(),
+                    "total_quantity" to corr.totalQuantity,
+                    "note" to corr.note,
+                    "correction_reason_id" to corr.correctionReasonId
+                )
+            }
+        )
     }
 
     @Transactional(rollbackFor = [Exception::class])
@@ -52,9 +66,12 @@ class OperationService(
         totalQuantity: Int?,
         differences: List<Map<String, Any?>>?,
         allowShortage: Boolean?,
-        shortageAdjustments: List<Map<String, Any?>>?
+        shortageAdjustments: List<Map<String, Any?>>?,
+        plannedSupplyId: Long? = null,
+        parentOperationId: Long? = null,
+        correctionReasonId: Long? = null
     ): Map<String, Any?> {
-        val validTypes = listOf("receipt", "shipment", "inventory", "writeoff", "correction")
+        val validTypes = listOf("receipt", "shipment", "inventory", "writeoff", "correction", "receipt_return")
         if (type !in validTypes) throw BadRequestException("Invalid operation type")
 
         val channelCode = when {
@@ -71,8 +88,12 @@ class OperationService(
             items = items?.mapNotNull { toItemInput(it) } ?: emptyList(),
             diffs = differences?.mapNotNull { toDiffInput(it) } ?: emptyList(),
             allowShortage = allowShortage ?: false,
-            shortageAdjustments = shortageAdjustments?.mapNotNull { toShortageInput(it) } ?: emptyList()
+            shortageAdjustments = shortageAdjustments?.mapNotNull { toShortageInput(it) } ?: emptyList(),
+            plannedSupplyId = plannedSupplyId,
+            parentOperationId = parentOperationId,
+            correctionReasonId = correctionReasonId
         )
+
         return operationsWriterService.recordOperation(cmd)
     }
 
@@ -161,6 +182,7 @@ class OperationService(
         "items" to buildItemsForResponse(op.id!!),
         "total_quantity" to op.totalQuantity,
         "differences" to buildDiffsForResponse(op.id, op.typeCode),
+        "planned_supply_id" to op.plannedSupplyId,
         "created_at" to op.createdAt?.toString(),
         "updated_at" to op.updatedAt?.toString()
     )

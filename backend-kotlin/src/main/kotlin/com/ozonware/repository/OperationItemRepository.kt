@@ -12,6 +12,8 @@ interface OperationItemRepository : JpaRepository<OperationItem, Long> {
 
     fun findAllByOperationId(operationId: Long): List<OperationItem>
 
+    fun findAllByOperationIdIn(operationIds: Collection<Long>): List<OperationItem>
+
     fun deleteAllByOperationId(operationId: Long)
 
     @Query("SELECT COUNT(DISTINCT i.operationId) FROM OperationItem i WHERE i.productId = :productId")

@@ -1,0 +1,57 @@
+package com.ozonware.controller
+
+import com.ozonware.dto.request.PlannedSupplyCreateRequest
+import com.ozonware.service.PlannedSupplyService
+import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.*
+
+@RestController
+@RequestMapping("/api/planned-supplies")
+class PlannedSupplyController(
+    private val plannedSupplyService: PlannedSupplyService
+) {
+
+    @GetMapping
+    fun list(
+        @RequestParam(defaultValue = "false") includeClosed: Boolean,
+        @RequestParam(defaultValue = "0") page: Int,
+        @RequestParam(defaultValue = "20") size: Int
+    ): ResponseEntity<Map<String, Any?>> =
+        ResponseEntity.ok(plannedSupplyService.listSupplies(includeClosed, page, size))
+
+    @GetMapping("/{id}")
+    fun getById(@PathVariable id: Long): ResponseEntity<Map<String, Any?>> =
+        ResponseEntity.ok(plannedSupplyService.getSupply(id))
+
+    @PostMapping
+    fun create(@RequestBody req: PlannedSupplyCreateRequest): ResponseEntity<Map<String, Any?>> {
+        val result = plannedSupplyService.createSupply(req)
+
+        return ResponseEntity.status(201).body(result)
+    }
+
+    @PutMapping("/{id}")
+    fun update(
+        @PathVariable id: Long,
+        @RequestBody req: PlannedSupplyCreateRequest
+    ): ResponseEntity<Map<String, Any?>> =
+        ResponseEntity.ok(plannedSupplyService.updateSupply(id, req))
+
+    @DeleteMapping("/{id}")
+    fun delete(@PathVariable id: Long): ResponseEntity<Map<String, String>> {
+        plannedSupplyService.deleteSupply(id)
+
+        return ResponseEntity.ok(mapOf("message" to "Supply deleted"))
+    }
+
+    @PostMapping("/{id}/close")
+    fun close(
+        @PathVariable id: Long,
+        @RequestBody(required = false) body: Map<String, String?>?
+    ): ResponseEntity<Map<String, Any?>> {
+        val note = body?.get("note")
+        val result = plannedSupplyService.closeSupply(id, note)
+
+        return ResponseEntity.ok(result)
+    }
+}

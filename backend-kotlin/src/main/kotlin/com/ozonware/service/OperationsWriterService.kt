@@ -33,7 +33,10 @@ data class RecordOperationCommand(
     val allowShortage: Boolean = false,
     val shortageAdjustments: List<ShortageInput> = emptyList(),
     /** Если true — при нехватке автоматически компенсирует недостачу вместо 400 (только для FBS/FBO) */
-    val autoCompensate: Boolean = false
+    val autoCompensate: Boolean = false,
+    val plannedSupplyId: Long? = null,
+    val parentOperationId: Long? = null,
+    val correctionReasonId: Long? = null,
 ) {
     data class ItemInput(
         val productId: Long,
@@ -74,7 +77,8 @@ class OperationsWriterService(
     private val correctionReasonRepository: CorrectionReasonRepository,
     private val ozonPostingRepository: OzonPostingRepository,
     private val ozonFboSupplyRepository: OzonFboSupplyRepository,
-    private val entityManager: EntityManager
+    private val entityManager: EntityManager,
+    private val plannedSupplyService: PlannedSupplyService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(OperationsWriterService::class.java)
@@ -85,9 +89,10 @@ class OperationsWriterService(
     @Transactional(rollbackFor = [Exception::class])
     fun recordOperation(cmd: RecordOperationCommand): Map<String, Any?> {
         return when (cmd.typeCode) {
-            "shipment"  -> recordShipment(cmd)
-            "inventory" -> recordInventory(cmd)
-            else        -> recordSimpleOperation(cmd)
+            "shipment"      -> recordShipment(cmd)
+            "inventory"     -> recordInventory(cmd)
+            "receipt_return" -> recordSimpleOperation(cmd)
+            else            -> recordSimpleOperation(cmd)
         }
     }
 
@@ -96,9 +101,10 @@ class OperationsWriterService(
         operationRepository.findById(id).orElseThrow { ResourceNotFoundException("Operation not found") }
         rollbackAndCleanItems(id)
         return when (cmd.typeCode) {
-            "shipment"  -> recordShipment(cmd, existingOpId = id)
-            "inventory" -> recordInventory(cmd, existingOpId = id)
-            else        -> recordSimpleOperation(cmd, existingOpId = id)
+            "shipment"       -> recordShipment(cmd, existingOpId = id)
+            "inventory"      -> recordInventory(cmd, existingOpId = id)
+            "receipt_return" -> recordSimpleOperation(cmd, existingOpId = id)
+            else             -> recordSimpleOperation(cmd, existingOpId = id)
         }
     }
 
@@ -129,7 +135,10 @@ class OperationsWriterService(
     ): Map<String, Any?> {
         val op = persistOperation(
             existingOpId, cmd.typeCode, cmd.channelCode, cmd.operationDate, cmd.note ?: "",
-            cmd.items.sumOf { it.quantity }
+            cmd.items.sumOf { it.quantity },
+            parentOperationId = cmd.parentOperationId,
+            correctionReasonId = cmd.correctionReasonId,
+            plannedSupplyId = cmd.plannedSupplyId
         )
         for (input in cmd.items) {
             val product = productRepository.findById(input.productId).orElseThrow {
@@ -164,6 +173,11 @@ class OperationsWriterService(
                     .executeUpdate()
             }
         }
+
+        if (cmd.plannedSupplyId != null) {
+            plannedSupplyService.recalcStatus(cmd.plannedSupplyId!!)
+        }
+
         return buildResult(op)
     }
 
@@ -240,7 +254,8 @@ class OperationsWriterService(
 
         val op = persistOperation(
             existingOpId, "shipment", cmd.channelCode, cmd.operationDate, cmd.note ?: "",
-            preparedItems.sumOf { (it["appliedQuantity"] as? Int) ?: (it["quantity"] as? Int) ?: 0 }
+            preparedItems.sumOf { (it["appliedQuantity"] as? Int) ?: (it["quantity"] as? Int) ?: 0 },
+            plannedSupplyId = cmd.plannedSupplyId
         )
 
         for (item in preparedItems) {
@@ -287,6 +302,10 @@ class OperationsWriterService(
                 ))
             }
             correctionOperationId = corrOp.id
+        }
+
+        if (cmd.plannedSupplyId != null) {
+            plannedSupplyService.recalcStatus(cmd.plannedSupplyId!!)
         }
 
         return buildResult(op).toMutableMap().also {
@@ -387,7 +406,8 @@ class OperationsWriterService(
         note: String,
         totalQuantity: Int,
         parentOperationId: Long? = null,
-        correctionReasonId: Long? = null
+        correctionReasonId: Long? = null,
+        plannedSupplyId: Long? = null
     ): Operation {
         return if (existingId != null) {
             val op = operationRepository.findById(existingId).get()
@@ -398,12 +418,14 @@ class OperationsWriterService(
             op.operationDate = operationDate
             op.note = note
             op.totalQuantity = totalQuantity
+            op.plannedSupplyId = plannedSupplyId
             operationRepository.save(op)
         } else {
             operationRepository.save(Operation(
                 typeCode = typeCode, channelCode = channelCode,
                 parentOperationId = parentOperationId, correctionReasonId = correctionReasonId,
-                operationDate = operationDate, note = note, totalQuantity = totalQuantity
+                operationDate = operationDate, note = note, totalQuantity = totalQuantity,
+                plannedSupplyId = plannedSupplyId
             ))
         }
     }
@@ -423,15 +445,17 @@ class OperationsWriterService(
     }
 
     private fun simpleDelta(typeCode: String, qty: Int) = when (typeCode) {
-        "receipt"    ->  qty
-        "shipment"   -> -qty
-        "writeoff"   -> -qty
-        "correction" ->  qty
-        else         ->  0
+        "receipt"        ->  qty
+        "shipment"       -> -qty
+        "writeoff"       -> -qty
+        "correction"     ->  qty
+        "receipt_return" -> -qty
+        else             ->  0
     }
 
     private fun buildResult(op: Operation): Map<String, Any?> {
         val fresh = operationRepository.findById(op.id!!).get()
+
         return mapOf(
             "id" to fresh.id, "type_code" to fresh.typeCode,
             "channel_code" to fresh.channelCode, "operation_date" to fresh.operationDate?.toString(),
@@ -439,6 +463,7 @@ class OperationsWriterService(
             "items" to buildItemsForResponse(fresh.id!!),
             "total_quantity" to fresh.totalQuantity,
             "differences" to buildDiffsForResponse(fresh.id, fresh.typeCode),
+            "planned_supply_id" to fresh.plannedSupplyId,
             "created_at" to fresh.createdAt?.toString(),
             "updated_at" to fresh.updatedAt?.toString()
         )

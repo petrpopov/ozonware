@@ -32,6 +32,9 @@ data class Operation(
     @Column(name = "total_quantity")
     var totalQuantity: Int = 0,
 
+    @Column(name = "planned_supply_id")
+    var plannedSupplyId: Long? = null,
+
     @Column(name = "created_at")
     var createdAt: LocalDateTime? = null,
 

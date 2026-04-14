@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { services } from '../api/services.js';
 import { useRouteRefetch } from '../hooks/useRouteRefetch.js';
 import { useUiStore } from '../store/useUiStore.js';
 import OperationBuilder from '../components/OperationBuilder.jsx';
+import ReceiptBoxWizard from '../components/ReceiptBoxWizard.jsx';
 import OperationsHistory from '../components/OperationsHistory.jsx';
 import Modal from '../components/Modal.jsx';
 import { FIELD_NAME_OZON_PHOTO } from '../constants/fieldKinds.js';
@@ -81,6 +83,7 @@ async function loadXlsx() {
 export default function ReceiptPage() {
   const queryClient = useQueryClient();
   const pushToast = useUiStore((s) => s.pushToast);
+  const navigate = useNavigate();
   const [historyLimit, setHistoryLimit] = useState('20');
   const [historyPage, setHistoryPage] = useState(1);
   const [importFileName, setImportFileName] = useState('');
@@ -91,11 +94,22 @@ export default function ReceiptPage() {
   const [quantityColumn, setQuantityColumn] = useState('');
   const [importDate, setImportDate] = useState(new Date().toISOString().slice(0, 10));
   const [importError, setImportError] = useState('');
+  const [importPlanId, setImportPlanId] = useState(null);
+  const [availablePlansForImport, setAvailablePlansForImport] = useState([]);
   const [importOpen, setImportOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [receiptMode, setReceiptMode] = useState('normal');
   const [editOpen, setEditOpen] = useState(false);
   const [historySort, setHistorySort] = useState({ key: 'date', dir: 'desc' });
-  const [editForm, setEditForm] = useState({ id: null, operation_date: '', note: '', items: [] });
+  const [editForm, setEditForm] = useState({ id: null, operation_date: '', note: '', items: [], plannedSupplyId: null, corrections: [] });
+  const [correctionOpen, setCorrectionOpen] = useState(false);
+  const [correctionParentId, setCorrectionParentId] = useState(null);
+  const [correctionType, setCorrectionType] = useState('receipt'); // 'receipt' | 'receipt_return'
+  const [correctionDate, setCorrectionDate] = useState(new Date().toISOString().slice(0, 10));
+  const [correctionNote, setCorrectionNote] = useState('');
+  const [correctionReasonId, setCorrectionReasonId] = useState(null);
+  const [correctionItems, setCorrectionItems] = useState([]);
+  const [correctionReasonsList, setCorrectionReasonsList] = useState([]);
 
   const resetImportState = () => {
     setImportFileName('');
@@ -106,11 +120,16 @@ export default function ReceiptPage() {
     setQuantityColumn('');
     setImportDate(new Date().toISOString().slice(0, 10));
     setImportError('');
+    setImportPlanId(null);
+    setAvailablePlansForImport([]);
   };
 
   const openImportModal = () => {
     resetImportState();
     setImportOpen(true);
+    services.getPlannedSupplies({ includeClosed: false }).then((res) => {
+      setAvailablePlansForImport(Array.isArray(res) ? res : (res?.content || []));
+    }).catch(() => {});
   };
 
   const closeImportModal = () => {
@@ -119,6 +138,13 @@ export default function ReceiptPage() {
   };
 
   const productsQuery = useQuery({ queryKey: ['products', 'receipt'], queryFn: () => services.getProducts('') });
+
+  const boxSizeQuery = useQuery({
+    queryKey: ['app-setting', 'receipt_default_box_size'],
+    queryFn: () => services.getAppSetting('receipt_default_box_size'),
+    staleTime: 60_000
+  });
+  const globalBoxSize = parseInt(boxSizeQuery.data?.value, 10) || 10;
 
   const receiptSortKeyMap = { id: 'id', date: 'operationDate', items: 'id', total: 'totalQuantity', note: 'note' };
   const operationsSort = `${receiptSortKeyMap[historySort.key] || 'operationDate'},${historySort.dir}`;
@@ -202,7 +228,9 @@ export default function ReceiptPage() {
         id: full.id,
         operation_date: (full.operation_date || '').slice(0, 10),
         note: full.note || '',
-        items
+        items,
+        plannedSupplyId: full.planned_supply_id || null,
+        corrections: full.corrections || []
       });
       setEditOpen(true);
     } catch (error) {
@@ -387,6 +415,51 @@ export default function ReceiptPage() {
     onError: (error) => pushToast(error.message, 'error')
   });
 
+  useEffect(() => {
+    if (!correctionOpen) return;
+    services.getDictionary('correction_reasons')
+      .then((data) => setCorrectionReasonsList(Array.isArray(data) ? data : (data?.items || [])))
+      .catch(() => {});
+    setCorrectionDate(new Date().toISOString().slice(0, 10));
+    setCorrectionNote('');
+    setCorrectionItems([{ productId: '', quantity: 1, productName: '', productSku: '' }]);
+  }, [correctionOpen]);
+
+  const correctionMutation = useMutation({
+    mutationFn: (payload) => services.createOperation(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['operations'] });
+      pushToast('Корректировка создана', 'success');
+      setCorrectionOpen(false);
+      setEditOpen(false);
+    },
+    onError: (err) => pushToast(err.message || 'Ошибка', 'error')
+  });
+
+  const submitCorrection = () => {
+    const items = correctionItems
+      .filter((item) => item.productId && item.quantity > 0)
+      .map((item) => ({
+        productId: Number(item.productId),
+        quantity: Number(item.quantity),
+        productName: item.productName || undefined,
+        productSKU: item.productSku || undefined
+      }));
+    if (items.length === 0) {
+      pushToast('Добавьте хотя бы одну позицию', 'error');
+      return;
+    }
+    correctionMutation.mutate({
+      type: correctionType,
+      operation_date: correctionDate,
+      note: correctionNote || undefined,
+      parent_operation_id: correctionParentId,
+      correction_reason_id: correctionReasonId || undefined,
+      items,
+      total_quantity: items.reduce((sum, i) => sum + i.quantity, 0)
+    });
+  };
+
   const submitImportedReceipt = () => {
     if (!importFileName) {
       setImportError('Загрузите Excel файл');
@@ -421,7 +494,8 @@ export default function ReceiptPage() {
       operation_date: importDate,
       note: `Приход от ${importDate} (Excel: ${importFileName})`,
       total_quantity: totalQuantity,
-      items
+      items,
+      planned_supply_id: importPlanId
     });
   };
 
@@ -499,21 +573,47 @@ export default function ReceiptPage() {
 
       <Modal
         open={addOpen}
-        onClose={() => setAddOpen(false)}
+        onClose={() => { setAddOpen(false); setReceiptMode('normal'); }}
         title="Новый приход"
-        size="lg"
+        size={receiptMode === 'boxes' ? 'xl' : 'lg'}
         footer={
-          <button className="btn-cancel" type="button" onClick={() => setAddOpen(false)}>
+          <button className="btn-cancel" type="button" onClick={() => { setAddOpen(false); setReceiptMode('normal'); }}>
             Закрыть
           </button>
         }
       >
-        <OperationBuilder
-          type="receipt"
-          products={productsQuery.data || []}
-          onSubmit={(payload) => createMutation.mutate(payload)}
-          loading={createMutation.isPending}
-        />
+        <div className="segment-control" style={{ marginBottom: '1rem' }}>
+          <button
+            type="button"
+            className={`btn${receiptMode === 'normal' ? ' btn-primary' : ''}`}
+            onClick={() => setReceiptMode('normal')}
+          >
+            Обычный
+          </button>
+          <button
+            type="button"
+            className={`btn${receiptMode === 'boxes' ? ' btn-primary' : ''}`}
+            onClick={() => setReceiptMode('boxes')}
+          >
+            По коробкам
+          </button>
+        </div>
+        {receiptMode === 'normal' && (
+          <OperationBuilder
+            type="receipt"
+            products={productsQuery.data || []}
+            onSubmit={(payload) => createMutation.mutate(payload)}
+            loading={createMutation.isPending}
+          />
+        )}
+        {receiptMode === 'boxes' && (
+          <ReceiptBoxWizard
+            products={productsQuery.data || []}
+            globalBoxSize={globalBoxSize}
+            onSubmit={(payload) => createMutation.mutate(payload)}
+            loading={createMutation.isPending}
+          />
+        )}
       </Modal>
 
       <Modal
@@ -595,6 +695,24 @@ export default function ReceiptPage() {
             </div>
 
             {importFileName && <div className="import-file-name">Файл: {importFileName}</div>}
+
+            {/* Plan linkage */}
+            <div style={{ marginBottom: 'var(--space-3)' }}>
+              <label className="field-label" style={{ marginBottom: 'var(--space-1)', display: 'block' }}>
+                Привязать к плану (необязательно)
+              </label>
+              <select
+                className="input"
+                value={importPlanId || ''}
+                onChange={(e) => setImportPlanId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">— Без привязки —</option>
+                {availablePlansForImport.map((plan) => (
+                  <option key={plan.id} value={plan.id}>{plan.title} {plan.planned_date ? `(${plan.planned_date})` : ''}</option>
+                ))}
+              </select>
+            </div>
+
             {skuColumnIndex < 0 && importHeaders.length > 0 && (
               <div className="import-error">В выбранном листе не найдена колонка SKU</div>
             )}
@@ -650,6 +768,14 @@ export default function ReceiptPage() {
         size="lg"
         footer={
           <>
+            <button
+              className="btn"
+              type="button"
+              style={{ marginRight: 'auto' }}
+              onClick={() => { setCorrectionParentId(editForm.id); setCorrectionOpen(true); }}
+            >
+              + Корректировка
+            </button>
             <button className="btn-cancel" type="button" onClick={() => setEditOpen(false)}>
               Закрыть
             </button>
@@ -686,6 +812,36 @@ export default function ReceiptPage() {
                 />
               </label>
             </div>
+
+            {editForm.plannedSupplyId && (
+              <div style={{ marginBottom: 'var(--space-3)', padding: 'var(--space-2)', background: 'var(--bg-secondary)', borderRadius: 'var(--radius)' }}>
+                <span style={{ fontSize: '13px', color: 'var(--color-muted)' }}>Поставка: </span>
+                <a
+                  href={`/planned-supplies/${editForm.plannedSupplyId}`}
+                  style={{ color: 'var(--color-accent)', textDecoration: 'none', fontSize: '13px' }}
+                  onClick={(e) => { e.preventDefault(); navigate(`/planned-supplies/${editForm.plannedSupplyId}`); setEditOpen(false); }}
+                >
+                  #{editForm.plannedSupplyId} →
+                </a>
+              </div>
+            )}
+
+            {editForm.corrections && editForm.corrections.length > 0 && (
+              <div style={{ marginBottom: 'var(--space-3)' }}>
+                <p style={{ margin: '0 0 var(--space-1)', fontWeight: 500, fontSize: '13px' }}>Корректировки:</p>
+                {editForm.corrections.map((corr) => (
+                  <div key={corr.id} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', padding: 'var(--space-1) 0', fontSize: '13px' }}>
+                    <span style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}>#{corr.id}</span>
+                    <span style={{ fontFamily: 'var(--font-mono)' }}>{corr.operation_date}</span>
+                    <span style={{ color: corr.type_code === 'receipt_return' ? 'var(--color-danger)' : 'var(--color-success)' }}>
+                      {corr.type_code === 'receipt_return' ? '↩ Возврат' : '+ Доприёмка'}
+                    </span>
+                    <span style={{ fontFamily: 'var(--font-mono)' }}>{corr.total_quantity} шт.</span>
+                    {corr.note && <span style={{ color: 'var(--color-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{corr.note}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
 
             <div className="table-wrap receipt-import-preview">
               <table className="table compact table-compact">
@@ -731,6 +887,95 @@ export default function ReceiptPage() {
             </div>
 
       </Modal>
+      <Modal
+        open={correctionOpen}
+        onClose={() => setCorrectionOpen(false)}
+        title={`Корректировка к приёмке #${correctionParentId || ''}`}
+        size="lg"
+        footer={
+          <>
+            <button className="btn-cancel" type="button" onClick={() => setCorrectionOpen(false)}>Закрыть</button>
+            <button className="btn btn-primary" type="button" onClick={submitCorrection} disabled={correctionMutation.isPending}>
+              {correctionMutation.isPending ? 'Сохранение...' : 'Провести'}
+            </button>
+          </>
+        }
+      >
+        {/* Type picker */}
+        <div style={{ display: 'flex', gap: '8px', marginBottom: 'var(--space-3)' }}>
+          <button type="button" className={`btn ${correctionType === 'receipt' ? 'btn-primary' : ''}`}
+            onClick={() => setCorrectionType('receipt')}>
+            + Добавить недовоз
+          </button>
+          <button type="button" className={`btn ${correctionType === 'receipt_return' ? 'btn-danger' : ''}`}
+            onClick={() => setCorrectionType('receipt_return')}>
+            ↩ Вернуть лишнее
+          </button>
+        </div>
+
+        {/* Date + note */}
+        <div className="form-row two-cols" style={{ marginBottom: 'var(--space-3)' }}>
+          <label>
+            Дата
+            <input className="input" type="date" value={correctionDate}
+              onChange={(e) => setCorrectionDate(e.target.value)} />
+          </label>
+          <label>
+            Примечание
+            <input className="input" value={correctionNote}
+              onChange={(e) => setCorrectionNote(e.target.value)} />
+          </label>
+        </div>
+
+        {/* Reason */}
+        {correctionReasonsList.length > 0 && (
+          <div style={{ marginBottom: 'var(--space-3)' }}>
+            <label>
+              Причина
+              <select className="input" value={correctionReasonId || ''}
+                onChange={(e) => setCorrectionReasonId(e.target.value ? Number(e.target.value) : null)}>
+                <option value="">— не указана —</option>
+                {correctionReasonsList.map((r) => (
+                  <option key={r.id} value={r.id}>{r.label}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+
+        {/* Items */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+          <p style={{ margin: 0, fontWeight: 500 }}>Позиции:</p>
+          {correctionItems.map((item, idx) => (
+            <div key={idx} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
+              <select className="input" style={{ flex: 2 }}
+                value={item.productId}
+                onChange={(e) => {
+                  const prod = (productsQuery.data || []).find((p) => String(p.id) === e.target.value);
+                  setCorrectionItems((prev) => prev.map((ci, i) => i === idx
+                    ? { ...ci, productId: e.target.value, productName: prod?.name || '', productSku: prod?.sku || '' }
+                    : ci
+                  ));
+                }}>
+                <option value="">— выберите товар —</option>
+                {(productsQuery.data || []).map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
+                ))}
+              </select>
+              <input className="input" type="number" min={1} style={{ width: 80 }}
+                value={item.quantity}
+                onChange={(e) => setCorrectionItems((prev) => prev.map((ci, i) => i === idx ? { ...ci, quantity: Number(e.target.value) } : ci))} />
+              <button className="btn btn-danger" type="button" style={{ padding: '4px 8px' }}
+                onClick={() => setCorrectionItems((prev) => prev.filter((_, i) => i !== idx))}>✕</button>
+            </div>
+          ))}
+          <button className="btn" type="button"
+            onClick={() => setCorrectionItems((prev) => [...prev, { productId: '', quantity: 1, productName: '', productSku: '' }])}>
+            + Добавить позицию
+          </button>
+        </div>
+      </Modal>
+
     </div>
   );
 }
