@@ -62,7 +62,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (fieldsQuery.data) {
-      setFields(fieldsQuery.data.map(normalizeField));
+      setFields(fieldsQuery.data.filter((f) => !f.is_system).map(normalizeField));
     }
   }, [fieldsQuery.data]);
 
