@@ -98,22 +98,36 @@ class OperationsWriterService(
 
     @Transactional(rollbackFor = [Exception::class])
     fun updateOperation(id: Long, cmd: RecordOperationCommand): Map<String, Any?> {
-        operationRepository.findById(id).orElseThrow { ResourceNotFoundException("Operation not found") }
+        val existing = operationRepository.findById(id).orElseThrow { ResourceNotFoundException("Operation not found") }
+        val parentOpId = existing.parentOperationId
         rollbackAndCleanItems(id)
-        return when (cmd.typeCode) {
+        val result = when (cmd.typeCode) {
             "shipment"       -> recordShipment(cmd, existingOpId = id)
             "inventory"      -> recordInventory(cmd, existingOpId = id)
             "receipt_return" -> recordSimpleOperation(cmd, existingOpId = id)
             else             -> recordSimpleOperation(cmd, existingOpId = id)
         }
+        // recordSimpleOperation already calls recalcStatus if cmd.plannedSupplyId != null.
+        // For corrections (plannedSupplyId is null but linked via parent), recalc explicitly.
+        if (cmd.plannedSupplyId == null && parentOpId != null) {
+            operationRepository.findById(parentOpId).orElse(null)
+                ?.plannedSupplyId?.let { plannedSupplyService.recalcStatus(it) }
+        }
+        return result
     }
 
     @Transactional(rollbackFor = [Exception::class])
     fun deleteOperation(id: Long) {
         val op = operationRepository.findById(id).orElseThrow { ResourceNotFoundException("Operation not found") }
+        val parentOpId = op.parentOperationId
+        val directSupplyId = op.plannedSupplyId
         rollbackAndCleanItems(id)
         unlinkExternalReferences(op)
         operationRepository.delete(op)
+        val supplyId = directSupplyId ?: parentOpId?.let {
+            operationRepository.findById(it).orElse(null)?.plannedSupplyId
+        }
+        supplyId?.let { plannedSupplyService.recalcStatus(it) }
     }
 
     @Transactional(rollbackFor = [Exception::class])
@@ -176,6 +190,9 @@ class OperationsWriterService(
 
         if (cmd.plannedSupplyId != null) {
             plannedSupplyService.recalcStatus(cmd.plannedSupplyId!!)
+        } else if (cmd.parentOperationId != null) {
+            operationRepository.findById(cmd.parentOperationId!!).orElse(null)
+                ?.plannedSupplyId?.let { plannedSupplyService.recalcStatus(it) }
         }
 
         return buildResult(op)
