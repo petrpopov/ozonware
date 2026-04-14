@@ -575,20 +575,6 @@ export default function PlannedSupplyDetailPage() {
           </>
         }
       >
-        {/* Type — hidden in edit mode (type is immutable) */}
-        {corrEditId === null && (
-          <div style={{ display: 'flex', gap: '8px', marginBottom: 'var(--space-3)' }}>
-            <button type="button" className={`btn ${corrType === 'receipt' ? 'btn-primary' : ''}`}
-              onClick={() => setCorrType('receipt')}>
-              + Добавить недовоз
-            </button>
-            <button type="button" className={`btn ${corrType === 'receipt_return' ? 'btn-danger' : ''}`}
-              onClick={() => setCorrType('receipt_return')}>
-              ↩ Вернуть лишнее
-            </button>
-          </div>
-        )}
-
         {/* Receipt selector (if multiple) */}
         {(supply?.operations || []).length > 1 && (
           <div style={{ marginBottom: 'var(--space-3)' }}>
