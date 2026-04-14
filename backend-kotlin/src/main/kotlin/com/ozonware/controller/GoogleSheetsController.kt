@@ -1,5 +1,7 @@
 package com.ozonware.controller
 
+import com.ozonware.dto.request.GoogleSheetsConfigRequest
+import com.ozonware.exception.BadRequestException
 import com.ozonware.service.GoogleSheetsService
 import com.ozonware.service.SettingsService
 import org.slf4j.LoggerFactory
@@ -18,7 +20,7 @@ class GoogleSheetsController(
     }
 
     @GetMapping("/google-sheets-config")
-    fun getConfig(): ResponseEntity<Map<String, Any>> {
+    fun getConfig(): ResponseEntity<Any> {
         val config = try {
             settingsService.getSetting("google_sheets_config")
         } catch (e: Exception) {
@@ -26,77 +28,43 @@ class GoogleSheetsController(
         }
 
         return if (config != null) {
-            @Suppress("UNCHECKED_CAST")
-            ResponseEntity.ok(config as Map<String, Any>)
+            ResponseEntity.ok(config)
         } else {
-            ResponseEntity.ok(mapOf(
-                "spreadsheetId" to "",
-                "sheetName" to "Лист1",
-                "skuColumn" to "A",
-                "quantityColumn" to "B",
-                "startRow" to 2
-            ))
+            ResponseEntity.ok(GoogleSheetsConfigRequest())
         }
     }
 
     @PostMapping("/google-sheets-config")
-    fun saveConfig(@RequestBody body: Map<String, Any>): ResponseEntity<Any> {
-        log.info("[GoogleSheetsController] saveConfig: spreadsheetId={} sheet={}", body["spreadsheetId"], body["sheetName"])
-        val setting = settingsService.saveSetting("google_sheets_config", body)
+    fun saveConfig(@RequestBody req: GoogleSheetsConfigRequest): ResponseEntity<Any> {
+        log.info("[GoogleSheetsController] saveConfig: spreadsheetId={} sheet={}", req.spreadsheetId, req.sheetName)
+        val setting = settingsService.saveSetting("google_sheets_config", req)
+
         return ResponseEntity.ok(setting.settingValue!!)
     }
 
     @PostMapping("/google-sheets-test")
-    fun testConnection(@RequestBody body: Map<String, Any>): ResponseEntity<Map<String, Any>> {
-        val spreadsheetId = body["spreadsheetId"] as? String
-        if (spreadsheetId.isNullOrBlank()) {
-            return ResponseEntity.badRequest().body(mapOf(
-                "success" to false,
-                "error" to "Spreadsheet ID is required"
-            ))
-        }
-        if (!googleSheetsService.isInitialized) {
-            return ResponseEntity.status(503).body(mapOf(
-                "success" to false,
-                "error" to "Google Sheets service not initialized. Check credentials file."
-            ))
-        }
-        return try {
-            @Suppress("UNCHECKED_CAST")
-            ResponseEntity.ok(googleSheetsService.testConnection(spreadsheetId) as Map<String, Any>)
-        } catch (e: Exception) {
-            ResponseEntity.status(500).body(mapOf("success" to false, "error" to (e.message ?: "Connection failed")))
-        }
+    fun testConnection(@RequestBody req: GoogleSheetsConfigRequest): ResponseEntity<Map<String, Any>> {
+        if (req.spreadsheetId.isNullOrBlank()) throw BadRequestException("Spreadsheet ID is required")
+        if (!googleSheetsService.isInitialized) throw BadRequestException("Google Sheets service not initialized. Check credentials file.")
+
+        return ResponseEntity.ok(googleSheetsService.testConnection(req.spreadsheetId))
     }
 
     @PostMapping("/google-sheets-sync")
-    fun sync(@RequestBody body: Map<String, Any?>): ResponseEntity<Map<String, Any>> {
-        val spreadsheetId = body["spreadsheetId"] as? String
-        if (spreadsheetId.isNullOrBlank()) {
-            return ResponseEntity.badRequest().body(mapOf(
-                "success" to false,
-                "error" to "Missing required parameter: spreadsheetId"
-            ))
-        }
-        if (!googleSheetsService.isInitialized) {
-            return ResponseEntity.status(503).body(mapOf(
-                "success" to false,
-                "error" to "Google Sheets service not initialized. Check credentials file."
-            ))
-        }
-        log.info("[GoogleSheetsController] sync requested: spreadsheetId={} sheet={}", spreadsheetId, body["sheetName"])
-        return try {
-            val result = googleSheetsService.syncProducts(
-                spreadsheetId = spreadsheetId,
-                sheetName = (body["sheetName"] as? String) ?: "Лист1",
-                skuColumn = (body["skuColumn"] as? String) ?: "A",
-                quantityColumn = (body["quantityColumn"] as? String) ?: "B",
-                startRow = (body["startRow"] as? Number)?.toInt() ?: 2
-            )
-            @Suppress("UNCHECKED_CAST")
-            ResponseEntity.ok(result as Map<String, Any>)
-        } catch (e: Exception) {
-            ResponseEntity.status(500).body(mapOf("success" to false, "error" to (e.message ?: "Sync failed")))
-        }
+    fun sync(@RequestBody req: GoogleSheetsConfigRequest): ResponseEntity<Map<String, Any>> {
+        if (req.spreadsheetId.isNullOrBlank()) throw BadRequestException("Missing required parameter: spreadsheetId")
+        if (!googleSheetsService.isInitialized) throw BadRequestException("Google Sheets service not initialized. Check credentials file.")
+
+        log.info("[GoogleSheetsController] sync requested: spreadsheetId={} sheet={}", req.spreadsheetId, req.sheetName)
+
+        val result = googleSheetsService.syncProducts(
+            spreadsheetId = req.spreadsheetId,
+            sheetName = req.sheetName,
+            skuColumn = req.skuColumn,
+            quantityColumn = req.quantityColumn,
+            startRow = req.startRow
+        )
+
+        return ResponseEntity.ok(result)
     }
 }

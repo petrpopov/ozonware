@@ -65,6 +65,17 @@ For detailed information, read the relevant `.memory_bank/` file:
 - No auth — single user (user_id=1).
 - No test framework or linter configured.
 
+## Kotlin Conventions
+
+- do not use it in lambdas, only variables
+- use logger as log variable in companion object
+- empty string before return
+- camelCase for method names and variables
+- avoid magic string literals - use constants, enums and other desicions
+- use KISS princible - do not overcomplicate architecture
+- do not use single interface implementations - use class instead
+- use classic patterns, DRY, SOLID, KISS, but do not overcomplicate for simple logic, no need to create Factory for two decisions
+
 ## Database Access
 
 `psql` is NOT installed on the host. Always run SQL via Docker exec into the container:

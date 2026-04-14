@@ -1,7 +1,8 @@
 package com.ozonware.controller
 
+import com.ozonware.dto.request.ProductCreateRequest
+import com.ozonware.dto.request.ProductUpdateRequest
 import com.ozonware.exception.BadRequestException
-import com.ozonware.service.ProductFieldsService
 import com.ozonware.service.ProductService
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
@@ -12,10 +13,7 @@ import org.springframework.web.bind.annotation.*
 /** REST controller for product catalog — paginated list with search, CRUD with custom field support. */
 @RestController
 @RequestMapping("/api/products")
-class ProductController(
-    private val productService: ProductService,
-    private val productFieldsService: ProductFieldsService
-) {
+class ProductController(private val productService: ProductService) {
 
     @GetMapping
     fun getAll(
@@ -26,22 +24,21 @@ class ProductController(
         pageable: Pageable
     ): ResponseEntity<Any> {
         if (page == null) {
-            val products = productService.findAll(search)
-            return ResponseEntity.ok(products.map { productToMap(it) })
+            return ResponseEntity.ok(productService.findAll(search).map { productService.toResponse(it) })
         }
+
         return ResponseEntity.ok(productService.findAllPaged(search, hideZeroStock, pageable))
     }
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: Long): ResponseEntity<Map<String, Any?>> {
-        val product = productService.findById(id)
-        return ResponseEntity.ok(productToMap(product))
-    }
+    fun getById(@PathVariable id: Long): ResponseEntity<Map<String, Any?>> =
+        ResponseEntity.ok(productService.toResponse(productService.findById(id)))
 
     @GetMapping("/{id}/usage")
     fun getUsage(@PathVariable id: Long): ResponseEntity<Map<String, Any>> {
         val product = productService.findById(id)
         val operationsCount = productService.countOperationsForProduct(product.id!!)
+
         return ResponseEntity.ok(mapOf(
             "product_id" to product.id!!,
             "operations_count" to operationsCount,
@@ -50,45 +47,24 @@ class ProductController(
     }
 
     @PostMapping
-    fun create(@RequestBody body: Map<String, Any?>): ResponseEntity<Map<String, Any?>> {
-        val name = body["name"] as? String ?: throw BadRequestException("Name and SKU are required")
-        val sku = body["sku"] as? String ?: throw BadRequestException("Name and SKU are required")
-        val quantity = (body["quantity"] as? Number)?.toInt() ?: 0
-        val description = body["description"] as? String ?: ""
-        val customFields = @Suppress("UNCHECKED_CAST") (body["custom_fields"] as? List<Map<String, Any>>) ?: emptyList()
+    fun create(@RequestBody req: ProductCreateRequest): ResponseEntity<Map<String, Any?>> {
+        if (req.name.isBlank() || req.sku.isBlank()) throw BadRequestException("Name and SKU are required")
+        val product = productService.createProduct(req.name, req.sku, req.quantity, req.description, req.customFields)
 
-        val product = productService.createProduct(name, sku, quantity, description, customFields)
-        return ResponseEntity.status(201).body(productToMap(product))
+        return ResponseEntity.status(201).body(productService.toResponse(product))
     }
 
     @PutMapping("/{id}")
-    fun update(@PathVariable id: Long, @RequestBody body: Map<String, Any?>): ResponseEntity<Map<String, Any?>> {
-        val name = body["name"] as String
-        val sku = body["sku"] as String
-        val quantity = (body["quantity"] as? Number)?.toInt() ?: 0
-        val description = body["description"] as? String ?: ""
-        val customFields = @Suppress("UNCHECKED_CAST") (body["custom_fields"] as? List<Map<String, Any>>) ?: emptyList()
+    fun update(@PathVariable id: Long, @RequestBody req: ProductUpdateRequest): ResponseEntity<Map<String, Any?>> {
+        val product = productService.updateProduct(id, req.name, req.sku, req.quantity, req.description, req.customFields)
 
-        val product = productService.updateProduct(id, name, sku, quantity, description, customFields)
-        return ResponseEntity.ok(productToMap(product))
+        return ResponseEntity.ok(productService.toResponse(product))
     }
 
     @DeleteMapping("/{id}")
     fun delete(@PathVariable id: Long): ResponseEntity<Map<String, String>> {
         productService.deleteProduct(id)
-        return ResponseEntity.ok(mapOf("message" to "Product deleted"))
-    }
 
-    private fun productToMap(product: com.ozonware.entity.Product): Map<String, Any?> {
-        return mapOf(
-            "id" to product.id,
-            "name" to product.name,
-            "sku" to product.sku,
-            "quantity" to product.quantity,
-            "description" to product.description,
-            "custom_fields" to productFieldsService.readCustomFields(product.id!!),
-            "created_at" to product.createdAt?.toString(),
-            "updated_at" to product.updatedAt?.toString()
-        )
+        return ResponseEntity.ok(mapOf("message" to "Product deleted"))
     }
 }

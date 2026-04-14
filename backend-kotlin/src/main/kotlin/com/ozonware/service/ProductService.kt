@@ -40,7 +40,7 @@ class ProductService(
         val items = sorted.drop(offset).take(size)
 
         return mapOf(
-            "items"       to items.map { productToMap(it) },
+            "items"       to items.map { toResponse(it) },
             "total"       to total,
             "totalAll"    to totalAll,
             "limit"       to size,
@@ -61,7 +61,7 @@ class ProductService(
         return if (order.isAscending) products.sortedWith(comparator) else products.sortedWith(comparator.reversed())
     }
 
-    private fun productToMap(product: Product): Map<String, Any?> = mapOf(
+    fun toResponse(product: Product): Map<String, Any?> = mapOf(
         "id"          to product.id,
         "name"        to product.name,
         "sku"         to product.sku,

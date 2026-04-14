@@ -56,6 +56,20 @@ class ProductFieldService(
         return productFieldRepository.save(field)
     }
 
+    fun toResponse(field: ProductField): Map<String, Any?> = mapOf(
+        "id" to field.id,
+        "name" to field.name,
+        "type" to field.type,
+        "kind" to field.kind,
+        "is_system" to field.isSystem,
+        "required" to field.required,
+        "show_in_table" to field.showInTable,
+        "options" to field.options,
+        "position" to field.position,
+        "created_at" to field.createdAt?.toString(),
+        "updated_at" to field.updatedAt?.toString()
+    )
+
     fun deleteField(id: Long): ProductField {
         val field = productFieldRepository.findById(id).orElseThrow {
             ResourceNotFoundException("Product field not found")

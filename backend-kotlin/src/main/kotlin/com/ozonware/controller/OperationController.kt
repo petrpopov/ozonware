@@ -1,5 +1,9 @@
 package com.ozonware.controller
 
+import com.ozonware.dto.request.OperationBulkDeleteRequest
+import com.ozonware.dto.request.OperationCreateRequest
+import com.ozonware.dto.request.OperationUpdateRequest
+import com.ozonware.exception.BadRequestException
 import com.ozonware.service.OperationService
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Sort
@@ -19,35 +23,21 @@ class OperationController(
         @RequestParam(required = false) filter: String?,
         @PageableDefault(size = 20, sort = ["operationDate"], direction = Sort.Direction.DESC)
         pageable: Pageable
-    ): ResponseEntity<Any> {
-        return ResponseEntity.ok(operationService.findAll(filter, pageable))
-    }
+    ): ResponseEntity<Any> =
+        ResponseEntity.ok(operationService.findAll(filter, pageable))
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: Long): ResponseEntity<Map<String, Any?>> {
-        return ResponseEntity.ok(operationService.findById(id))
-    }
+    fun getById(@PathVariable id: Long): ResponseEntity<Map<String, Any?>> =
+        ResponseEntity.ok(operationService.findById(id))
 
     @PostMapping
-    fun create(@RequestBody body: Map<String, Any?>): ResponseEntity<Any> {
-        val type = body["type"] as String
-        val operationDate = body["operation_date"] as? String
-        val note = body["note"] as? String
-        @Suppress("UNCHECKED_CAST")
-        val items = body["items"] as? List<Map<String, Any?>>
-        val totalQuantity = (body["total_quantity"] as? Number)?.toInt()
-        @Suppress("UNCHECKED_CAST")
-        val differences = body["differences"] as? List<Map<String, Any?>>
-        val allowShortage = body["allow_shortage"] as? Boolean
-        @Suppress("UNCHECKED_CAST")
-        val shortageAdjustments = body["shortage_adjustments"] as? List<Map<String, Any?>>
-
+    fun create(@RequestBody req: OperationCreateRequest): ResponseEntity<Any> {
         val result = operationService.createOperation(
-            type, operationDate, note, items, totalQuantity, differences,
-            allowShortage, shortageAdjustments
+            req.type, req.operationDate, req.note, req.items, req.totalQuantity,
+            req.differences, req.allowShortage, req.shortageAdjustments
         )
-
         val correctionId = result["correction_operation_id"]
+
         return ResponseEntity.status(201).body(
             result.filterKeys { it != "correction_operation_id" } +
                 ("correction_operation_id" to (correctionId ?: 0))
@@ -55,39 +45,25 @@ class OperationController(
     }
 
     @PutMapping("/{id}")
-    fun update(@PathVariable id: Long, @RequestBody body: Map<String, Any?>): ResponseEntity<Map<String, Any?>> {
-        val operationDate = body["operation_date"] as? String
-        val note = body["note"] as? String
-        @Suppress("UNCHECKED_CAST")
-        val items = body["items"] as? List<Map<String, Any?>>
-        val totalQuantity = (body["total_quantity"] as? Number)?.toInt()
-        @Suppress("UNCHECKED_CAST")
-        val differences = body["differences"] as? List<Map<String, Any?>>
-        val allowShortage = body["allow_shortage"] as? Boolean
-        @Suppress("UNCHECKED_CAST")
-        val shortageAdjustments = body["shortage_adjustments"] as? List<Map<String, Any?>>
-
-        return ResponseEntity.ok(
+    fun update(@PathVariable id: Long, @RequestBody req: OperationUpdateRequest): ResponseEntity<Map<String, Any?>> =
+        ResponseEntity.ok(
             operationService.updateOperation(
-                id, operationDate, note, items, totalQuantity, differences,
-                allowShortage, shortageAdjustments
+                id, req.operationDate, req.note, req.items, req.totalQuantity,
+                req.differences, req.allowShortage, req.shortageAdjustments
             )
         )
-    }
 
     @DeleteMapping("/{id}")
     fun delete(@PathVariable id: Long): ResponseEntity<Map<String, String>> {
         operationService.deleteOperation(id)
+
         return ResponseEntity.ok(mapOf("message" to "Operation deleted"))
     }
 
     @PostMapping("/bulk-delete")
-    fun bulkDelete(@RequestBody body: Map<String, Any?>): ResponseEntity<Map<String, Any>> {
-        @Suppress("UNCHECKED_CAST")
-        val ids = (body["ids"] as? List<*>)?.mapNotNull { (it as? Number)?.toLong() } ?: emptyList()
-        if (ids.isEmpty()) {
-            return ResponseEntity.badRequest().body(mapOf("error" to "ids array is required"))
-        }
-        return ResponseEntity.ok(operationService.bulkDeleteOperations(ids))
+    fun bulkDelete(@RequestBody req: OperationBulkDeleteRequest): ResponseEntity<Map<String, Any>> {
+        if (req.ids.isEmpty()) throw BadRequestException("ids array is required")
+
+        return ResponseEntity.ok(operationService.bulkDeleteOperations(req.ids))
     }
 }
