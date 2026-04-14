@@ -5,6 +5,7 @@ import { MoonIcon, SunIcon } from './Icons.jsx';
 const tabs = [
   ['products', 'Товары'],
   ['receipt', 'Приход'],
+  ['planned-supplies', 'Поставки'],
   ['shipment', 'Отгрузка'],
   ['writeoff', 'Списания'],
   ['inventory', 'Инвентаризация'],

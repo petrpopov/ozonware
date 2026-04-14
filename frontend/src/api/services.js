@@ -69,4 +69,14 @@ export const services = {
   createDictionaryItem: (name, body) => api.post(`/dictionaries/${name}`, body),
   updateDictionaryItem: (name, id, body) => api.patch(`/dictionaries/${name}/${id}`, body),
   deleteDictionaryItem: (name, id) => api.del(`/dictionaries/${name}/${id}`),
+
+  getPlannedSupplies: ({ includeClosed = false, page = 0, size = 20 } = {}) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size), includeClosed: String(includeClosed) });
+    return api.get(`/planned-supplies?${params}`);
+  },
+  getPlannedSupplyById: (id) => api.get(`/planned-supplies/${id}`),
+  createPlannedSupply: (payload) => api.post('/planned-supplies', payload),
+  updatePlannedSupply: (id, payload) => api.put(`/planned-supplies/${id}`, payload),
+  deletePlannedSupply: (id) => api.del(`/planned-supplies/${id}`),
+  closePlannedSupply: (id, note) => api.post(`/planned-supplies/${id}/close`, { note }),
 };
