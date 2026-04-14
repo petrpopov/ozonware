@@ -13,8 +13,8 @@ data class OzonPostingStatus(
     @Type(JsonType::class)
     @Column(name = "csv_aliases", columnDefinition = "jsonb")
     val csvAliases: List<String> = emptyList()
-) {
-    fun toMap() = mapOf(
+) : DictionaryEntry {
+    override fun toMap() = mapOf(
         "code" to code,
         "label" to label,
         "is_terminal" to isTerminal,

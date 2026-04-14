@@ -11,8 +11,8 @@ data class WriteoffReason(
     @Column(name = "affects_stock") val affectsStock: Boolean = true,
     @Column(name = "is_system") val isSystem: Boolean = false,
     val position: Int = 0
-) {
-    fun toMap() = mapOf(
+) : DictionaryEntry {
+    override fun toMap() = mapOf(
         "id" to id,
         "code" to code,
         "label" to label,

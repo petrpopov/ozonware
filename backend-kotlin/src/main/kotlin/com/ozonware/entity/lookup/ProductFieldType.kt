@@ -9,8 +9,8 @@ data class ProductFieldType(
     val label: String,
     val widget: String,
     val stores: String
-) {
-    fun toMap() = mapOf(
+) : DictionaryEntry {
+    override fun toMap() = mapOf(
         "code" to code,
         "label" to label,
         "widget" to widget,

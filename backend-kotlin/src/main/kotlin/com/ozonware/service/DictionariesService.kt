@@ -1,6 +1,9 @@
 package com.ozonware.service
 
+import com.ozonware.domain.enums.DictionaryName
+import com.ozonware.dto.request.DictionaryItemRequest
 import com.ozonware.entity.lookup.*
+import com.ozonware.exception.BadRequestException
 import com.ozonware.repository.lookup.*
 import org.springframework.stereotype.Service
 import java.time.LocalDateTime
@@ -22,45 +25,66 @@ class DictionariesService(
     private val cache = ConcurrentHashMap<String, List<*>>()
 
     @Suppress("UNCHECKED_CAST")
-    private fun <T> cached(key: String, loader: () -> List<T>): List<T> =
-        cache.getOrPut(key) { loader() } as List<T>
+    private fun <T : DictionaryEntry> cached(dict: DictionaryName, loader: () -> List<T>): List<T> =
+        cache.getOrPut(dict.value) { loader() } as List<T>
 
-    fun invalidate(vararg keys: String) {
-        if (keys.isEmpty()) cache.clear() else keys.forEach { cache.remove(it) }
+    fun invalidate(vararg dicts: DictionaryName) {
+        if (dicts.isEmpty()) cache.clear() else dicts.forEach { cache.remove(it.value) }
     }
 
-    // --- Getters ---
+    // --- Public API ---
 
-    fun getOperationTypes() = cached("operation_types") {
-        operationTypeRepository.findAllByOrderByPositionAsc()
+    fun list(dict: DictionaryName): List<Map<String, Any?>> = when (dict) {
+        DictionaryName.OPERATION_TYPES       -> cached(dict) { operationTypeRepository.findAllByOrderByPositionAsc() }
+        DictionaryName.OPERATION_CHANNELS    -> cached(dict) { operationChannelRepository.findAll() }
+        DictionaryName.WRITEOFF_REASONS      -> cached(dict) { writeoffReasonRepository.findAllByOrderByPositionAsc() }
+        DictionaryName.CORRECTION_REASONS    -> cached(dict) { correctionReasonRepository.findAllByOrderByPositionAsc() }
+        DictionaryName.PRODUCT_FIELD_TYPES   -> cached(dict) { productFieldTypeRepository.findAll() }
+        DictionaryName.OZON_POSTING_STATUSES -> cached(dict) { ozonPostingStatusRepository.findAll() }
+        DictionaryName.OZON_SUPPLY_STATES    -> cached(dict) { ozonSupplyStateRepository.findAll() }
+        DictionaryName.WAREHOUSES            -> cached(dict) { warehouseRepository.findAll() }
+    }.map { it.toMap() }
+
+    fun create(dict: DictionaryName, req: DictionaryItemRequest): Map<String, Any?> = when (dict) {
+        DictionaryName.WRITEOFF_REASONS -> createWriteoffReason(
+            code = req.code ?: throw BadRequestException("code required"),
+            label = req.label ?: throw BadRequestException("label required"),
+            affectsStock = req.affectsStock
+        ).toMap()
+        DictionaryName.CORRECTION_REASONS -> createCorrectionReason(
+            code = req.code ?: throw BadRequestException("code required"),
+            label = req.label ?: throw BadRequestException("label required")
+        ).toMap()
+        DictionaryName.WAREHOUSES -> createWarehouse(
+            name = req.name ?: throw BadRequestException("name required"),
+            address = req.address
+        ).toMap()
+        else -> throw BadRequestException("Dictionary ${dict.value} is read-only")
     }
 
-    fun getOperationChannels() = cached("operation_channels") {
-        operationChannelRepository.findAll()
+    fun update(dict: DictionaryName, id: Long, req: DictionaryItemRequest): Map<String, Any?> = when (dict) {
+        DictionaryName.WRITEOFF_REASONS -> updateWriteoffReason(
+            id = id,
+            label = req.label ?: throw BadRequestException("label required"),
+            affectsStock = req.affectsStock
+        ).toMap()
+        DictionaryName.CORRECTION_REASONS -> updateCorrectionReason(
+            id = id,
+            label = req.label ?: throw BadRequestException("label required")
+        ).toMap()
+        DictionaryName.WAREHOUSES -> updateWarehouse(
+            id = id,
+            name = req.name ?: throw BadRequestException("name required"),
+            address = req.address
+        ).toMap()
+        else -> throw BadRequestException("Dictionary ${dict.value} is read-only")
     }
 
-    fun getWriteoffReasons() = cached("writeoff_reasons") {
-        writeoffReasonRepository.findAllByOrderByPositionAsc()
-    }
-
-    fun getCorrectionReasons() = cached("correction_reasons") {
-        correctionReasonRepository.findAllByOrderByPositionAsc()
-    }
-
-    fun getProductFieldTypes() = cached("product_field_types") {
-        productFieldTypeRepository.findAll()
-    }
-
-    fun getOzonPostingStatuses() = cached("ozon_posting_statuses") {
-        ozonPostingStatusRepository.findAll()
-    }
-
-    fun getOzonSupplyStates() = cached("ozon_supply_states") {
-        ozonSupplyStateRepository.findAll()
-    }
-
-    fun getWarehouses() = cached("warehouses") {
-        warehouseRepository.findAll()
+    fun delete(dict: DictionaryName, id: Long) = when (dict) {
+        DictionaryName.WRITEOFF_REASONS   -> deleteWriteoffReason(id)
+        DictionaryName.CORRECTION_REASONS -> deleteCorrectionReason(id)
+        DictionaryName.WAREHOUSES         -> deleteWarehouse(id)
+        else -> throw BadRequestException("Dictionary ${dict.value} is read-only")
     }
 
     // --- WriteoffReason CRUD (non-system only) ---
@@ -70,7 +94,8 @@ class DictionariesService(
         val entity = writeoffReasonRepository.save(
             WriteoffReason(code = code, label = label, affectsStock = affectsStock, isSystem = false, position = nextPos)
         )
-        invalidate("writeoff_reasons")
+        invalidate(DictionaryName.WRITEOFF_REASONS)
+
         return entity
     }
 
@@ -78,7 +103,8 @@ class DictionariesService(
         val entity = writeoffReasonRepository.findById(id).orElseThrow { NoSuchElementException("WriteoffReason $id not found") }
         require(!entity.isSystem) { "Cannot modify system entry" }
         val updated = writeoffReasonRepository.save(entity.copy(label = label, affectsStock = affectsStock))
-        invalidate("writeoff_reasons")
+        invalidate(DictionaryName.WRITEOFF_REASONS)
+
         return updated
     }
 
@@ -86,7 +112,7 @@ class DictionariesService(
         val entity = writeoffReasonRepository.findById(id).orElseThrow { NoSuchElementException("WriteoffReason $id not found") }
         require(!entity.isSystem) { "Cannot delete system entry" }
         writeoffReasonRepository.deleteById(id)
-        invalidate("writeoff_reasons")
+        invalidate(DictionaryName.WRITEOFF_REASONS)
     }
 
     // --- CorrectionReason CRUD (non-system only) ---
@@ -96,7 +122,8 @@ class DictionariesService(
         val entity = correctionReasonRepository.save(
             CorrectionReason(code = code, label = label, isSystem = false, position = nextPos)
         )
-        invalidate("correction_reasons")
+        invalidate(DictionaryName.CORRECTION_REASONS)
+
         return entity
     }
 
@@ -104,7 +131,8 @@ class DictionariesService(
         val entity = correctionReasonRepository.findById(id).orElseThrow { NoSuchElementException("CorrectionReason $id not found") }
         require(!entity.isSystem) { "Cannot modify system entry" }
         val updated = correctionReasonRepository.save(entity.copy(label = label))
-        invalidate("correction_reasons")
+        invalidate(DictionaryName.CORRECTION_REASONS)
+
         return updated
     }
 
@@ -112,7 +140,7 @@ class DictionariesService(
         val entity = correctionReasonRepository.findById(id).orElseThrow { NoSuchElementException("CorrectionReason $id not found") }
         require(!entity.isSystem) { "Cannot delete system entry" }
         correctionReasonRepository.deleteById(id)
-        invalidate("correction_reasons")
+        invalidate(DictionaryName.CORRECTION_REASONS)
     }
 
     // --- Warehouse CRUD ---
@@ -122,7 +150,8 @@ class DictionariesService(
         val entity = warehouseRepository.save(
             Warehouse(ozonWarehouseId = ozonWarehouseId, name = name, address = address, createdAt = now, updatedAt = now)
         )
-        invalidate("warehouses")
+        invalidate(DictionaryName.WAREHOUSES)
+
         return entity
     }
 
@@ -131,14 +160,15 @@ class DictionariesService(
         val updated = warehouseRepository.save(
             entity.copy(name = name, address = address, updatedAt = LocalDateTime.now(ZoneOffset.UTC))
         )
-        invalidate("warehouses")
+        invalidate(DictionaryName.WAREHOUSES)
+
         return updated
     }
 
     fun deleteWarehouse(id: Long) {
         warehouseRepository.findById(id).orElseThrow { NoSuchElementException("Warehouse $id not found") }
         warehouseRepository.deleteById(id)
-        invalidate("warehouses")
+        invalidate(DictionaryName.WAREHOUSES)
     }
 
     // --- Upsert для OzonService ---
@@ -151,17 +181,16 @@ class DictionariesService(
         } else {
             warehouseRepository.save(Warehouse(ozonWarehouseId = ozonWarehouseId, name = name, address = address, createdAt = now, updatedAt = now))
         }
-        invalidate("warehouses")
+        invalidate(DictionaryName.WAREHOUSES)
+
         return entity
     }
 
     fun normalizeOzonPostingStatus(rawStatus: String): String {
-        // canceled → canonical cancelled
         if (rawStatus == "canceled") return "cancelled"
-        val statuses = getOzonPostingStatuses()
-        // Точное совпадение по code
+        val statuses = cached(DictionaryName.OZON_POSTING_STATUSES) { ozonPostingStatusRepository.findAll() }
         if (statuses.any { it.code == rawStatus }) return rawStatus
-        // Поиск по csv_aliases
+
         return statuses.firstOrNull { rawStatus in it.csvAliases }?.code ?: rawStatus
     }
 }

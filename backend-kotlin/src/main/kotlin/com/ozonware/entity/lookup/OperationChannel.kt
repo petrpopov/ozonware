@@ -7,8 +7,8 @@ import jakarta.persistence.*
 data class OperationChannel(
     @Id val code: String,
     val label: String
-) {
-    fun toMap() = mapOf(
+) : DictionaryEntry {
+    override fun toMap() = mapOf(
         "code" to code,
         "label" to label
     )

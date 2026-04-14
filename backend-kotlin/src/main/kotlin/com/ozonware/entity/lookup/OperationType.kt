@@ -9,8 +9,8 @@ data class OperationType(
     val label: String,
     @Column(name = "affects_stock_sign") val affectsStockSign: Int,
     val position: Int = 0
-) {
-    fun toMap() = mapOf(
+) : DictionaryEntry {
+    override fun toMap() = mapOf(
         "code" to code,
         "label" to label,
         "affects_stock_sign" to affectsStockSign,

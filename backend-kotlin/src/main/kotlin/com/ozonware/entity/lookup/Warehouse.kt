@@ -12,8 +12,8 @@ data class Warehouse(
     val address: String? = null,
     @Column(name = "created_at") val createdAt: LocalDateTime? = null,
     @Column(name = "updated_at") val updatedAt: LocalDateTime? = null
-) {
-    fun toMap() = mapOf(
+) : DictionaryEntry {
+    override fun toMap() = mapOf(
         "id" to id,
         "ozon_warehouse_id" to ozonWarehouseId,
         "name" to name,
