@@ -37,6 +37,8 @@ class PlannedSupplyService(
 
     @Transactional
     fun createSupply(req: PlannedSupplyCreateRequest): Map<String, Any?> {
+        require(req.title.isNotBlank()) { "Название плана обязательно" }
+
         val now = LocalDateTime.now()
         val supply = plannedSupplyRepository.save(
             PlannedSupply(
@@ -63,10 +65,14 @@ class PlannedSupplyService(
             plannedSupplyRepository.findAllByStatusNot(STATUS_CLOSED, pageable)
         }
 
+        val ids = result.content.mapNotNull { supply -> supply.id }
+        val itemsBySupplyId = plannedSupplyItemRepository
+            .findAllByPlannedSupplyIdIn(ids)
+            .groupBy { item -> item.plannedSupplyId }
+
         return mapOf(
             "content" to result.content.map { supply ->
-                val items = plannedSupplyItemRepository.findAllByPlannedSupplyId(supply.id!!)
-                buildResponse(supply, items)
+                buildResponse(supply, itemsBySupplyId[supply.id!!] ?: emptyList())
             },
             "page" to mapOf(
                 "number" to result.number,
@@ -108,6 +114,8 @@ class PlannedSupplyService(
 
     @Transactional
     fun updateSupply(id: Long, req: PlannedSupplyCreateRequest): Map<String, Any?> {
+        require(req.title.isNotBlank()) { "Название плана обязательно" }
+
         val supply = plannedSupplyRepository.findById(id)
             .orElseThrow { ResourceNotFoundException("PlannedSupply not found: $id") }
 
@@ -151,6 +159,10 @@ class PlannedSupplyService(
         val supply = plannedSupplyRepository.findById(id)
             .orElseThrow { ResourceNotFoundException("PlannedSupply not found: $id") }
 
+        if (supply.status == STATUS_CLOSED) {
+            throw BadRequestException("Поставка уже закрыта")
+        }
+
         supply.status = STATUS_CLOSED
         if (note != null) {
             supply.note = if (supply.note.isNullOrBlank()) note else "${supply.note}\n$note"
@@ -183,12 +195,16 @@ class PlannedSupplyService(
         if (items.isEmpty()) return
 
         // Aggregate factual quantities by SKU from all linked operations and their corrections
+        val directOpIds = operations.mapNotNull { op -> op.id }
+        val corrections = operationRepository.findAllByParentOperationIdIn(directOpIds)
+        val allOpIds = (directOpIds + corrections.mapNotNull { corr -> corr.id }).toSet()
+        val allOpItems = operationItemRepository.findAllByOperationIdIn(allOpIds)
+
         val factualBySku = mutableMapOf<String, Int>()
-        for (op in operations) {
-            accumulateOperationItems(op.id!!, factualBySku)
-            val corrections = operationRepository.findByParentOperationId(op.id)
-            for (corr in corrections) {
-                accumulateOperationItems(corr.id!!, factualBySku)
+        for (opItem in allOpItems) {
+            val delta = opItem.delta?.toInt() ?: 0
+            if (delta > 0) {
+                factualBySku.merge(opItem.productSkuSnapshot, delta, Int::plus)
             }
         }
 
@@ -204,16 +220,6 @@ class PlannedSupplyService(
             supply.updatedAt = LocalDateTime.now()
             plannedSupplyRepository.save(supply)
             log.info("[recalcStatus] supply $id status changed to $newStatus")
-        }
-    }
-
-    private fun accumulateOperationItems(operationId: Long, target: MutableMap<String, Int>) {
-        val opItems = operationItemRepository.findAllByOperationId(operationId)
-        for (item in opItems) {
-            val delta = item.delta?.toInt() ?: 0
-            if (delta > 0) {
-                target.merge(item.productSkuSnapshot, delta, Int::plus)
-            }
         }
     }
 
@@ -245,6 +251,10 @@ class PlannedSupplyService(
         itemRequests: List<PlannedSupplyCreateRequest.ItemRequest>
     ): List<PlannedSupplyItem> {
         return itemRequests.map { itemReq ->
+            require(itemReq.plannedQuantity > 0) {
+                "planned_quantity должен быть > 0 для SKU ${itemReq.sku}"
+            }
+
             val product = productRepository.findBySku(itemReq.sku).orElse(null)
             plannedSupplyItemRepository.save(
                 PlannedSupplyItem(
