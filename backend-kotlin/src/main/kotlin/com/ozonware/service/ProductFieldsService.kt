@@ -38,11 +38,18 @@ class ProductFieldsService(
         )
         for ((name, fieldKind) in legacyNameToKind) {
             val field = productFieldRepository.findByName(name) ?: continue
+            var changed = false
             if (field.kind != fieldKind.code) {
                 field.kind = fieldKind.code
+                changed = true
+            }
+            if (!field.isSystem) {
                 field.isSystem = true
+                changed = true
+            }
+            if (changed) {
                 productFieldRepository.save(field)
-                log.info("[ProductFieldsService] bootstrap: поле '{}' → kind='{}'", name, fieldKind.code)
+                log.info("[ProductFieldsService] bootstrap: поле '{}' → kind='{}' isSystem=true", name, fieldKind.code)
             }
         }
 

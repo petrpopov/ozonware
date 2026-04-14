@@ -117,9 +117,12 @@ class OperationService(
 
     private fun toItemInput(item: Map<String, Any?>): RecordOperationCommand.ItemInput? {
         val productId = (item["productId"] as? Number)?.toLong() ?: return null
+        val quantity = (item["quantity"] as? Number)?.toInt() ?: 0
+        if (quantity <= 0) throw BadRequestException("Quantity must be a positive integer for product $productId")
+
         return RecordOperationCommand.ItemInput(
             productId = productId,
-            quantity = (item["quantity"] as? Number)?.toInt() ?: 0,
+            quantity = quantity,
             reasonCode = item["reason"] as? String,
             note = item["note"] as? String,
             productName = item["productName"] as? String,

@@ -1,6 +1,7 @@
 package com.ozonware.service
 
 import com.ozonware.entity.ProductField
+import com.ozonware.exception.BadRequestException
 import com.ozonware.exception.ResourceNotFoundException
 import com.ozonware.repository.ProductFieldRepository
 import org.springframework.stereotype.Service
@@ -47,6 +48,7 @@ class ProductFieldService(
         val field = productFieldRepository.findById(id).orElseThrow {
             ResourceNotFoundException("Product field not found")
         }
+        if (field.isSystem) throw BadRequestException("Cannot modify system field")
         field.name = name
         field.type = type
         field.required = required
@@ -74,6 +76,7 @@ class ProductFieldService(
         val field = productFieldRepository.findById(id).orElseThrow {
             ResourceNotFoundException("Product field not found")
         }
+        if (field.isSystem) throw BadRequestException("Cannot delete system field")
         productFieldRepository.delete(field)
         return field
     }

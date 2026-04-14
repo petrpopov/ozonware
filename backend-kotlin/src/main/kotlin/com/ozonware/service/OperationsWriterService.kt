@@ -305,14 +305,23 @@ class OperationsWriterService(
         existingOpId?.let { operationInventoryDiffRepository.deleteAllByOperationId(it) }
 
         for (d in cmd.diffs) {
-            val p = productRepository.findById(d.productId).orElse(null)
+            @Suppress("UNCHECKED_CAST")
+            val lockedRows = entityManager.createNativeQuery(
+                "SELECT id, name, sku, quantity FROM products WHERE id = ? FOR UPDATE"
+            ).setParameter(1, d.productId).resultList as List<Array<Any?>>
+            val locked = lockedRows.firstOrNull()
+                ?: throw ResourceNotFoundException("Product not found: ${d.productId}")
+            val dbExpected = (locked[3] as Number).toInt()
+            val dbName = locked[1] as? String ?: ""
+            val dbSku = locked[2] as? String ?: ""
+
             operationInventoryDiffRepository.save(OperationInventoryDiff(
                 operationId = op.id!!,
                 productId = d.productId,
-                expected = BigDecimal.valueOf(d.expected.toLong()),
+                expected = BigDecimal.valueOf(dbExpected.toLong()),
                 actual   = BigDecimal.valueOf(d.actual.toLong()),
-                productNameSnapshot = d.productName ?: p?.name ?: "",
-                productSkuSnapshot  = d.productSku  ?: p?.sku  ?: ""
+                productNameSnapshot = d.productName ?: dbName,
+                productSkuSnapshot  = d.productSku  ?: dbSku
             ))
             entityManager.createNativeQuery(
                 "UPDATE products SET quantity = ?, updated_at = NOW() WHERE id = ?"
