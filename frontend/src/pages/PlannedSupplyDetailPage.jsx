@@ -350,7 +350,7 @@ export default function PlannedSupplyDetailPage() {
         <button className="btn" onClick={() => navigate('/planned-supplies')}>← К поставкам</button>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           {supply.status !== 'closed' && !closePromptOpen && (
-            <button className="btn" onClick={() => setClosePromptOpen(true)}>Закрыть план</button>
+            <button className="btn" onClick={() => setClosePromptOpen(true)}>Закрыть поставку</button>
           )}
         </div>
       </div>
@@ -394,7 +394,7 @@ export default function PlannedSupplyDetailPage() {
       {/* Close prompt (inline) */}
       {closePromptOpen && (
         <div style={{ padding: '12px', border: '1px solid var(--color-border)', borderRadius: '6px' }}>
-          <p style={{ margin: '0 0 8px', fontSize: '14px' }}>Закрыть план? Укажите примечание (необязательно):</p>
+          <p style={{ margin: '0 0 8px', fontSize: '14px' }}>Закрыть поставку? Укажите примечание (необязательно):</p>
           <textarea
             className="input"
             style={{ width: '100%', resize: 'vertical', minHeight: '60px', marginBottom: '8px' }}
