@@ -34,7 +34,10 @@ class OperationController(
     fun create(@RequestBody req: OperationCreateRequest): ResponseEntity<Any> {
         val result = operationService.createOperation(
             req.type, req.operationDate, req.note, req.items, req.totalQuantity,
-            req.differences, req.allowShortage, req.shortageAdjustments
+            req.differences, req.allowShortage, req.shortageAdjustments,
+            plannedSupplyId = req.plannedSupplyId,
+            parentOperationId = req.parentOperationId,
+            correctionReasonId = req.correctionReasonId
         )
         val correctionId = result["correction_operation_id"]
 
