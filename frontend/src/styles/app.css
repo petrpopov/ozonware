@@ -17,6 +17,7 @@
   --color-warning: oklch(0.55 0.16 72);
   --color-warning-bg: oklch(0.97 0.03 80);
   --color-danger-bg: oklch(0.97 0.025 25);
+  --color-info: oklch(0.52 0.18 255);
   /* Layout / overlay */
   --overlay-bg: rgba(0, 0, 0, 0.5);
   --border-subtle: rgba(0, 0, 0, 0.08);
@@ -48,6 +49,7 @@
   --color-warning: oklch(0.72 0.13 75);
   --color-warning-bg: oklch(0.19 0.04 75);
   --color-danger-bg: oklch(0.19 0.04 25);
+  --color-info: oklch(0.68 0.17 255);
   /* Layout / overlay */
   --overlay-bg: rgba(0, 0, 0, 0.7);
   --border-subtle: rgba(255, 255, 255, 0.1);
@@ -473,6 +475,15 @@ body {
   outline-offset: 2px;
 }
 
+.btn:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: var(--shadow-border);
+}
+
+.btn-primary:focus:not(:focus-visible) {
+  box-shadow: none;
+}
+
 .btn-primary {
   background: var(--primary);
   color: var(--primary-contrast);
@@ -481,6 +492,20 @@ body {
 
 .btn-primary:hover {
   opacity: 0.85;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.55s linear infinite;
+  flex-shrink: 0;
 }
 
 .btn-ghost {
@@ -1089,8 +1114,6 @@ td.row-actions {
 .inventory-boxes-list {
   display: grid;
   gap: 8px;
-  max-height: 52vh;
-  overflow: auto;
   padding-right: 2px;
 }
 
@@ -2343,7 +2366,7 @@ td.row-actions {
   }
 
   .inventory-boxes-list {
-    max-height: 42vh;
+    /* no inner scroll — modal scroll handles it */
   }
 
   .cell-name {

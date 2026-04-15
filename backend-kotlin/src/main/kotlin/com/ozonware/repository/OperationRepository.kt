@@ -32,6 +32,8 @@ interface OperationRepository : JpaRepository<Operation, Long>, JpaSpecification
 
     fun findByPlannedSupplyId(plannedSupplyId: Long): List<Operation>
 
+    fun findAllByPlannedSupplyIdIn(ids: Collection<Long>): List<Operation>
+
     @Query("SELECT o FROM Operation o WHERE o.typeCode = :typeCode AND o.channelCode = :channelCode AND o.operationDate = :date ORDER BY o.id DESC")
     fun findByTypeCodeAndChannelCodeAndOperationDate(
         @Param("typeCode") typeCode: String,

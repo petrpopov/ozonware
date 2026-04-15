@@ -2,6 +2,9 @@ package com.ozonware.controller
 
 import com.ozonware.dto.request.PlannedSupplyCreateRequest
 import com.ozonware.service.PlannedSupplyService
+import org.springframework.data.domain.Pageable
+import org.springframework.data.domain.Sort
+import org.springframework.data.web.PageableDefault
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 
@@ -13,11 +16,10 @@ class PlannedSupplyController(
 
     @GetMapping
     fun list(
-        @RequestParam(defaultValue = "false") includeClosed: Boolean,
-        @RequestParam(defaultValue = "0") page: Int,
-        @RequestParam(defaultValue = "20") size: Int
+        @RequestParam(required = false) filter: String?,
+        @PageableDefault(size = 20, sort = ["plannedDate"], direction = Sort.Direction.DESC) pageable: Pageable
     ): ResponseEntity<Map<String, Any?>> =
-        ResponseEntity.ok(plannedSupplyService.listSupplies(includeClosed, page, size))
+        ResponseEntity.ok(plannedSupplyService.listSupplies(filter, pageable))
 
     @GetMapping("/{id}")
     fun getById(@PathVariable id: Long): ResponseEntity<Map<String, Any?>> =

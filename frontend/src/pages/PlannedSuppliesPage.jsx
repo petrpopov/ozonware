@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { services } from '../api/services.js';
 import { useUiStore } from '../store/useUiStore.js';
 import Modal from '../components/Modal.jsx';
 import { parseSupplyXlsx } from '../utils/xlsxParser.js';
+import { EditIcon, TrashIcon } from '../components/Icons.jsx';
 
 const STATUS_LABELS = {
   planned: 'Запланирован',
@@ -14,10 +15,10 @@ const STATUS_LABELS = {
 };
 
 const STATUS_COLORS = {
-  planned: 'var(--color-muted)',
+  planned: 'var(--color-info)',
   partial: 'var(--color-warning)',
   matched: 'var(--color-success)',
-  closed: 'var(--color-muted)',
+  closed: 'var(--text-muted)',
 };
 
 function statusBadge(status) {
@@ -37,7 +38,11 @@ export default function PlannedSuppliesPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [createMode, setCreateMode] = useState('manual');
-  const [statusFilter, setStatusFilter] = useState('all');
+
+  const [statusKey, setStatusKey] = useState('all');
+  const [sort, setSort] = useState({ key: 'plannedDate', dir: 'desc' });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
 
   // Manual form state
   const [title, setTitle] = useState('');
@@ -54,20 +59,35 @@ export default function PlannedSuppliesPage() {
   const [excelDate, setExcelDate] = useState('');
   const [excelNote, setExcelNote] = useState('');
 
+  const rsqlFilter = statusKey === 'all' ? null : `status==${statusKey}`;
+  const sortStr = `${sort.key},${sort.dir}`;
+
   const suppliesQuery = useQuery({
-    queryKey: ['planned-supplies', statusFilter],
-    queryFn: () =>
-      services.getPlannedSupplies({
-        includeClosed: statusFilter === 'all' || statusFilter === 'closed',
-        size: 200,
-      }),
+    queryKey: ['planned-supplies', rsqlFilter, sortStr, page, pageSize],
+    queryFn: () => services.getPlannedSuppliesPage({
+      filter: rsqlFilter,
+      page: page - 1,
+      size: pageSize,
+      sort: sortStr,
+    }),
   });
 
-  const filtered = useMemo(() => {
-    const raw = suppliesQuery.data?.content || [];
-    if (statusFilter === 'all') return raw;
-    return raw.filter((s) => s.status === statusFilter);
-  }, [suppliesQuery.data, statusFilter]);
+  const supplies = suppliesQuery.data?.items || [];
+  const total = Number(suppliesQuery.data?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const toggleSort = (key) => {
+    setPage(1);
+    setSort((prev) => prev.key === key
+      ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: 'asc' }
+    );
+  };
+
+  const renderSortMark = (key) => {
+    if (sort.key !== key) return '↕';
+    return sort.dir === 'asc' ? '↑' : '↓';
+  };
 
   const createMutation = useMutation({
     mutationFn: (payload) => services.createPlannedSupply(payload),
@@ -183,8 +203,8 @@ export default function PlannedSuppliesPage() {
         {['all', 'planned', 'partial', 'matched', 'closed'].map((s) => (
           <button
             key={s}
-            className={`btn${statusFilter === s ? ' btn-primary' : ''}`}
-            onClick={() => setStatusFilter(s)}
+            className={`btn${statusKey === s ? ' btn-primary' : ''}`}
+            onClick={(e) => { e.currentTarget.blur(); setStatusKey(s); setPage(1); }}
           >
             {filterLabels[s]}
           </button>
@@ -195,54 +215,84 @@ export default function PlannedSuppliesPage() {
       {suppliesQuery.isError && <p style={{ color: 'var(--color-danger)' }}>Ошибка загрузки</p>}
 
       {!suppliesQuery.isLoading && !suppliesQuery.isError && (
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Название</th>
-              <th>Поставщик</th>
-              <th>Дата</th>
-              <th>Статус</th>
-              <th>Позиций</th>
-              <th>Приёмок</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={7} style={{ color: 'var(--color-muted)', textAlign: 'center' }}>
-                  Нет поставок
-                </td>
-              </tr>
-            )}
-            {filtered.map((supply) => (
-              <tr
-                key={supply.id}
-                style={{ cursor: 'pointer' }}
-                onClick={() => navigate(`/planned-supplies/${supply.id}`)}
+        <>
+          <div className="toolbar history-pager">
+            <label className="history-pager-label">
+              Показывать:
+              <select
+                className="input"
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
               >
-                <td>{supply.title}</td>
-                <td>{supply.supplier || '—'}</td>
-                <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.planned_date || '—'}</td>
-                <td>{statusBadge(supply.status)}</td>
-                <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.items?.length ?? supply.item_count ?? 0}</td>
-                <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.receipt_count ?? 0}</td>
-                <td onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="btn btn-danger"
-                    style={{ padding: '2px 8px', fontSize: '12px' }}
-                    disabled={deleteMutation.isPending}
-                    onClick={() => {
-                      if (window.confirm('Удалить план?')) deleteMutation.mutate(supply.id);
-                    }}
-                  >
-                    Удалить
-                  </button>
-                </td>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={200}>200</option>
+              </select>
+            </label>
+            <span className="history-pager-range">
+              {total === 0 ? '0' : `${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, total)}`} из {total}
+            </span>
+            <button className="btn" type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Назад</button>
+            <span className="history-pager-range">Стр. {page} / {totalPages}</span>
+            <button className="btn" type="button" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Вперед</button>
+          </div>
+
+          <table className="table">
+            <thead>
+              <tr>
+                <th className="sortable" onClick={() => toggleSort('title')}>Название <span>{renderSortMark('title')}</span></th>
+                <th className="sortable" onClick={() => toggleSort('supplier')}>Поставщик <span>{renderSortMark('supplier')}</span></th>
+                <th className="sortable" onClick={() => toggleSort('plannedDate')}>Дата <span>{renderSortMark('plannedDate')}</span></th>
+                <th className="sortable" onClick={() => toggleSort('status')}>Статус <span>{renderSortMark('status')}</span></th>
+                <th>Позиций</th>
+                <th>Приёмок</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {supplies.length === 0 && (
+                <tr>
+                  <td colSpan={7} style={{ color: 'var(--color-muted)', textAlign: 'center' }}>
+                    Нет поставок
+                  </td>
+                </tr>
+              )}
+              {supplies.map((supply) => (
+                <tr
+                  key={supply.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/planned-supplies/${supply.id}`)}
+                >
+                  <td>{supply.title}</td>
+                  <td>{supply.supplier || '—'}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.planned_date || '—'}</td>
+                  <td>{statusBadge(supply.status)}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.item_count ?? 0}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.receipt_count ?? 0}</td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                      <button
+                        className="btn btn-icon"
+                        aria-label="Редактировать"
+                        onClick={() => navigate(`/planned-supplies/${supply.id}`)}
+                      >
+                        <EditIcon />
+                      </button>
+                      <button
+                        className="btn btn-danger btn-icon"
+                        aria-label="Удалить"
+                        disabled={deleteMutation.isPending}
+                        onClick={() => { if (window.confirm('Удалить план?')) deleteMutation.mutate(supply.id); }}
+                      >
+                        <TrashIcon />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
       )}
 
       <Modal

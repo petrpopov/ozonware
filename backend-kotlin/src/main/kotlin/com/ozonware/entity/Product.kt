@@ -22,6 +22,9 @@ data class Product(
     @Column(columnDefinition = "TEXT")
     var description: String = "",
 
+    @Column(name = "default_box_size")
+    var defaultBoxSize: Int? = null,
+
     @Column(name = "created_at")
     var createdAt: LocalDateTime? = null,
 

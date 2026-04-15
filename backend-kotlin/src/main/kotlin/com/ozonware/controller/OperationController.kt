@@ -52,7 +52,8 @@ class OperationController(
         ResponseEntity.ok(
             operationService.updateOperation(
                 id, req.operationDate, req.note, req.items, req.totalQuantity,
-                req.differences, req.allowShortage, req.shortageAdjustments
+                req.differences, req.allowShortage, req.shortageAdjustments,
+                correctionReasonId = req.correctionReasonId
             )
         )
 

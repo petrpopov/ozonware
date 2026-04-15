@@ -13,6 +13,7 @@ const emptyForm = {
   sku: '',
   quantity: 0,
   description: '',
+  default_box_size: '',
   custom_fields: []
 };
 
@@ -95,6 +96,7 @@ export default function ProductCardPage() {
       sku: product.sku || '',
       quantity: Number(product.quantity || 0),
       description: product.description || '',
+      default_box_size: product.default_box_size != null ? String(product.default_box_size) : '',
       custom_fields: normalizeCustomFields(product, fields)
     });
     setErrors({});
@@ -114,6 +116,7 @@ export default function ProductCardPage() {
         sku: updated.sku || '',
         quantity: Number(updated.quantity || 0),
         description: updated.description || '',
+        default_box_size: updated.default_box_size != null ? String(updated.default_box_size) : '',
         custom_fields: normalizeCustomFields(updated, fields)
       }));
       pushToast('Товар сохранен', 'success');
@@ -152,6 +155,7 @@ export default function ProductCardPage() {
       sku: form.sku.trim(),
       quantity: Number(form.quantity || 0),
       description: form.description || '',
+      default_box_size: form.default_box_size !== '' ? Number(form.default_box_size) : null,
       custom_fields: form.custom_fields
     });
   };
@@ -230,6 +234,17 @@ export default function ProductCardPage() {
               type="number"
               value={form.quantity}
               onChange={(e) => setForm((s) => ({ ...s, quantity: e.target.value }))}
+            />
+          </label>
+          <label>
+            Шт в коробке (по умолчанию)
+            <input
+              className="input"
+              type="number"
+              min="1"
+              placeholder="Не задано"
+              value={form.default_box_size}
+              onChange={(e) => setForm((s) => ({ ...s, default_box_size: e.target.value }))}
             />
           </label>
           <label>

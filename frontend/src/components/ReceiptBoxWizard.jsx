@@ -202,7 +202,7 @@ export default function ReceiptBoxWizard({ products, globalBoxSize, onSubmit, lo
     setPlansLoading(true);
     try {
       const result = await services.getPlannedSupplies({ includeClosed: false });
-      const plans = Array.isArray(result) ? result : (result?.content || []);
+      const plans = Array.isArray(result) ? result : (result?.items || []);
       setAvailablePlans(plans);
     } catch {
       pushToast('Не удалось загрузить список поставок', 'error');

@@ -63,6 +63,9 @@ export const services = {
     return api.get(`/ozon/orders/product/${productId}/timeline${qs ? `?${qs}` : ''}`);
   },
 
+  getAppSetting: (key) => api.get(`/settings/${encodeURIComponent(key)}`).catch(() => null),
+  saveAppSetting: (key, value) => api.post(`/settings/${encodeURIComponent(key)}`, { value }),
+
   resetWarehouseState: () => api.post('/maintenance/reset-state', {}),
 
   getDictionary: (name) => api.get(`/dictionaries/${name}`),
@@ -70,8 +73,14 @@ export const services = {
   updateDictionaryItem: (name, id, body) => api.patch(`/dictionaries/${name}/${id}`, body),
   deleteDictionaryItem: (name, id) => api.del(`/dictionaries/${name}/${id}`),
 
-  getPlannedSupplies: ({ includeClosed = false, page = 0, size = 20 } = {}) => {
-    const params = new URLSearchParams({ page: String(page), size: String(size), includeClosed: String(includeClosed) });
+  getPlannedSupplies: ({ includeClosed = false, page = 0, size = 200 } = {}) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size), sort: 'plannedDate,desc' });
+    if (!includeClosed) params.set('filter', 'status!=closed');
+    return api.get(`/planned-supplies?${params}`);
+  },
+  getPlannedSuppliesPage: ({ filter, page = 0, size = 20, sort = 'plannedDate,desc' } = {}) => {
+    const params = new URLSearchParams({ page: String(page), size: String(size), sort });
+    if (filter) params.set('filter', filter);
     return api.get(`/planned-supplies?${params}`);
   },
   getPlannedSupplyById: (id) => api.get(`/planned-supplies/${id}`),

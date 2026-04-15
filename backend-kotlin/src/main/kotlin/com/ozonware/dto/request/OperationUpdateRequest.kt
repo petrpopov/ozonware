@@ -9,5 +9,6 @@ data class OperationUpdateRequest(
     @JsonProperty("total_quantity") val totalQuantity: Int? = null,
     val differences: List<Map<String, Any?>>? = null,
     @JsonProperty("allow_shortage") val allowShortage: Boolean? = null,
-    @JsonProperty("shortage_adjustments") val shortageAdjustments: List<Map<String, Any?>>? = null
+    @JsonProperty("shortage_adjustments") val shortageAdjustments: List<Map<String, Any?>>? = null,
+    @JsonProperty("correction_reason_id") val correctionReasonId: Long? = null
 )

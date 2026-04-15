@@ -5,6 +5,8 @@ const FOCUSABLE = 'button:not([disabled]), [href], input:not([disabled]), select
 export default function Modal({ open, onClose, title, footer, size = 'sm', children, className = '' }) {
   const modalRef = useRef(null);
   const previousFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -13,7 +15,7 @@ export default function Modal({ open, onClose, title, footer, size = 'sm', child
 
     const trapFocus = (event) => {
       if (event.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== 'Tab') return;
@@ -53,7 +55,7 @@ export default function Modal({ open, onClose, title, footer, size = 'sm', child
       window.removeEventListener('keydown', trapFocus);
       previousFocusRef.current?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

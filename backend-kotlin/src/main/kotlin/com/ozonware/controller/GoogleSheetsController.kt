@@ -62,7 +62,12 @@ class GoogleSheetsController(
             sheetName = req.sheetName,
             skuColumn = req.skuColumn,
             quantityColumn = req.quantityColumn,
-            startRow = req.startRow
+            startRow = req.startRow,
+            categoryColumn = req.categoryColumn,
+            colorNameColumn = req.colorNameColumn,
+            colorCodeColumn = req.colorCodeColumn,
+            swatchColumn = req.swatchColumn,
+            hexColumn = req.hexColumn
         )
 
         return ResponseEntity.ok(result)

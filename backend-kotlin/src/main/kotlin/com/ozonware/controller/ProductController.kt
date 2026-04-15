@@ -49,14 +49,14 @@ class ProductController(private val productService: ProductService) {
     @PostMapping
     fun create(@RequestBody req: ProductCreateRequest): ResponseEntity<Map<String, Any?>> {
         if (req.name.isBlank() || req.sku.isBlank()) throw BadRequestException("Name and SKU are required")
-        val product = productService.createProduct(req.name, req.sku, req.quantity, req.description, req.customFields)
+        val product = productService.createProduct(req.name, req.sku, req.quantity, req.description, req.defaultBoxSize, req.customFields)
 
         return ResponseEntity.status(201).body(productService.toResponse(product))
     }
 
     @PutMapping("/{id}")
     fun update(@PathVariable id: Long, @RequestBody req: ProductUpdateRequest): ResponseEntity<Map<String, Any?>> {
-        val product = productService.updateProduct(id, req.name, req.sku, req.quantity, req.description, req.customFields)
+        val product = productService.updateProduct(id, req.name, req.sku, req.quantity, req.description, req.defaultBoxSize, req.customFields)
 
         return ResponseEntity.ok(productService.toResponse(product))
     }

@@ -14,6 +14,8 @@ interface ProductFieldValueRepository : JpaRepository<ProductFieldValue, Long> {
 
     fun findByProductIdAndFieldId(productId: Long, fieldId: Long): ProductFieldValue?
 
+    fun findAllByFieldIdIn(fieldIds: Collection<Long>): List<ProductFieldValue>
+
     @Query(
         value = "SELECT pfv.* FROM product_field_values pfv " +
                 "JOIN product_fields pf ON pf.id = pfv.field_id " +

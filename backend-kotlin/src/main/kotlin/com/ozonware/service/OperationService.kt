@@ -106,7 +106,8 @@ class OperationService(
         totalQuantity: Int?,
         differences: List<Map<String, Any?>>?,
         allowShortage: Boolean?,
-        shortageAdjustments: List<Map<String, Any?>>?
+        shortageAdjustments: List<Map<String, Any?>>?,
+        correctionReasonId: Long? = null
     ): Map<String, Any?> {
         val existing = operationRepository.findById(id).orElseThrow { ResourceNotFoundException("Operation not found") }
         val channelCode = when {
@@ -123,7 +124,10 @@ class OperationService(
             items = items?.mapNotNull { toItemInput(it) } ?: emptyList(),
             diffs = differences?.mapNotNull { toDiffInput(it) } ?: emptyList(),
             allowShortage = allowShortage ?: false,
-            shortageAdjustments = shortageAdjustments?.mapNotNull { toShortageInput(it) } ?: emptyList()
+            shortageAdjustments = shortageAdjustments?.mapNotNull { toShortageInput(it) } ?: emptyList(),
+            parentOperationId = existing.parentOperationId,
+            plannedSupplyId = existing.plannedSupplyId,
+            correctionReasonId = correctionReasonId ?: existing.correctionReasonId
         )
         return operationsWriterService.updateOperation(id, cmd)
     }
@@ -183,6 +187,7 @@ class OperationService(
         "total_quantity" to op.totalQuantity,
         "differences" to buildDiffsForResponse(op.id, op.typeCode),
         "planned_supply_id" to op.plannedSupplyId,
+        "parent_operation_id" to op.parentOperationId,
         "created_at" to op.createdAt?.toString(),
         "updated_at" to op.updatedAt?.toString()
     )

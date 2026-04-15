@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { services } from '../api/services.js';
@@ -102,14 +102,6 @@ export default function ReceiptPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [historySort, setHistorySort] = useState({ key: 'date', dir: 'desc' });
   const [editForm, setEditForm] = useState({ id: null, operation_date: '', note: '', items: [], plannedSupplyId: null, corrections: [] });
-  const [correctionOpen, setCorrectionOpen] = useState(false);
-  const [correctionParentId, setCorrectionParentId] = useState(null);
-  const [correctionType, setCorrectionType] = useState('receipt'); // 'receipt' | 'receipt_return'
-  const [correctionDate, setCorrectionDate] = useState(new Date().toISOString().slice(0, 10));
-  const [correctionNote, setCorrectionNote] = useState('');
-  const [correctionReasonId, setCorrectionReasonId] = useState(null);
-  const [correctionItems, setCorrectionItems] = useState([]);
-  const [correctionReasonsList, setCorrectionReasonsList] = useState([]);
 
   const resetImportState = () => {
     setImportFileName('');
@@ -128,7 +120,7 @@ export default function ReceiptPage() {
     resetImportState();
     setImportOpen(true);
     services.getPlannedSupplies({ includeClosed: false }).then((res) => {
-      setAvailablePlansForImport(Array.isArray(res) ? res : (res?.content || []));
+      setAvailablePlansForImport(Array.isArray(res) ? res : (res?.items || []));
     }).catch(() => {});
   };
 
@@ -138,7 +130,6 @@ export default function ReceiptPage() {
   };
 
   const productsQuery = useQuery({ queryKey: ['products', 'receipt'], queryFn: () => services.getProducts('') });
-
   const boxSizeQuery = useQuery({
     queryKey: ['app-setting', 'receipt_default_box_size'],
     queryFn: () => services.getAppSetting('receipt_default_box_size'),
@@ -156,7 +147,7 @@ export default function ReceiptPage() {
     queryKey: ['operations', 'receipt', historyLimit, historyPage, historySort],
     queryFn: () =>
       services.getOperations({
-        filter: 'typeCode==receipt',
+        filter: 'typeCode==receipt;parentOperationId=isnull=true',
         page: operationsPage,
         size: operationsSize,
         sort: operationsSort
@@ -415,50 +406,6 @@ export default function ReceiptPage() {
     onError: (error) => pushToast(error.message, 'error')
   });
 
-  useEffect(() => {
-    if (!correctionOpen) return;
-    services.getDictionary('correction_reasons')
-      .then((data) => setCorrectionReasonsList(Array.isArray(data) ? data : (data?.items || [])))
-      .catch(() => {});
-    setCorrectionDate(new Date().toISOString().slice(0, 10));
-    setCorrectionNote('');
-    setCorrectionItems([{ productId: '', quantity: 1, productName: '', productSku: '' }]);
-  }, [correctionOpen]);
-
-  const correctionMutation = useMutation({
-    mutationFn: (payload) => services.createOperation(payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['operations'] });
-      pushToast('Корректировка создана', 'success');
-      setCorrectionOpen(false);
-      setEditOpen(false);
-    },
-    onError: (err) => pushToast(err.message || 'Ошибка', 'error')
-  });
-
-  const submitCorrection = () => {
-    const items = correctionItems
-      .filter((item) => item.productId && item.quantity > 0)
-      .map((item) => ({
-        productId: Number(item.productId),
-        quantity: Number(item.quantity),
-        productName: item.productName || undefined,
-        productSKU: item.productSku || undefined
-      }));
-    if (items.length === 0) {
-      pushToast('Добавьте хотя бы одну позицию', 'error');
-      return;
-    }
-    correctionMutation.mutate({
-      type: correctionType,
-      operation_date: correctionDate,
-      note: correctionNote || undefined,
-      parent_operation_id: correctionParentId,
-      correction_reason_id: correctionReasonId || undefined,
-      items,
-      total_quantity: items.reduce((sum, i) => sum + i.quantity, 0)
-    });
-  };
 
   const submitImportedReceipt = () => {
     if (!importFileName) {
@@ -768,14 +715,6 @@ export default function ReceiptPage() {
         size="lg"
         footer={
           <>
-            <button
-              className="btn"
-              type="button"
-              style={{ marginRight: 'auto' }}
-              onClick={() => { setCorrectionParentId(editForm.id); setCorrectionOpen(true); }}
-            >
-              + Корректировка
-            </button>
             <button className="btn-cancel" type="button" onClick={() => setEditOpen(false)}>
               Закрыть
             </button>
@@ -826,23 +765,6 @@ export default function ReceiptPage() {
               </div>
             )}
 
-            {editForm.corrections && editForm.corrections.length > 0 && (
-              <div style={{ marginBottom: 'var(--space-3)' }}>
-                <p style={{ margin: '0 0 var(--space-1)', fontWeight: 500, fontSize: '13px' }}>Корректировки:</p>
-                {editForm.corrections.map((corr) => (
-                  <div key={corr.id} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center', padding: 'var(--space-1) 0', fontSize: '13px' }}>
-                    <span style={{ color: 'var(--color-muted)', fontFamily: 'var(--font-mono)' }}>#{corr.id}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>{corr.operation_date}</span>
-                    <span style={{ color: corr.type_code === 'receipt_return' ? 'var(--color-danger)' : 'var(--color-success)' }}>
-                      {corr.type_code === 'receipt_return' ? '↩ Возврат' : '+ Доприёмка'}
-                    </span>
-                    <span style={{ fontFamily: 'var(--font-mono)' }}>{corr.total_quantity} шт.</span>
-                    {corr.note && <span style={{ color: 'var(--color-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{corr.note}</span>}
-                  </div>
-                ))}
-              </div>
-            )}
-
             <div className="table-wrap receipt-import-preview">
               <table className="table compact table-compact">
                 <thead>
@@ -886,94 +808,6 @@ export default function ReceiptPage() {
               </table>
             </div>
 
-      </Modal>
-      <Modal
-        open={correctionOpen}
-        onClose={() => setCorrectionOpen(false)}
-        title={`Корректировка к приёмке #${correctionParentId || ''}`}
-        size="lg"
-        footer={
-          <>
-            <button className="btn-cancel" type="button" onClick={() => setCorrectionOpen(false)}>Закрыть</button>
-            <button className="btn btn-primary" type="button" onClick={submitCorrection} disabled={correctionMutation.isPending}>
-              {correctionMutation.isPending ? 'Сохранение...' : 'Провести'}
-            </button>
-          </>
-        }
-      >
-        {/* Type picker */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: 'var(--space-3)' }}>
-          <button type="button" className={`btn ${correctionType === 'receipt' ? 'btn-primary' : ''}`}
-            onClick={() => setCorrectionType('receipt')}>
-            + Добавить недовоз
-          </button>
-          <button type="button" className={`btn ${correctionType === 'receipt_return' ? 'btn-danger' : ''}`}
-            onClick={() => setCorrectionType('receipt_return')}>
-            ↩ Вернуть лишнее
-          </button>
-        </div>
-
-        {/* Date + note */}
-        <div className="form-row two-cols" style={{ marginBottom: 'var(--space-3)' }}>
-          <label>
-            Дата
-            <input className="input" type="date" value={correctionDate}
-              onChange={(e) => setCorrectionDate(e.target.value)} />
-          </label>
-          <label>
-            Примечание
-            <input className="input" value={correctionNote}
-              onChange={(e) => setCorrectionNote(e.target.value)} />
-          </label>
-        </div>
-
-        {/* Reason */}
-        {correctionReasonsList.length > 0 && (
-          <div style={{ marginBottom: 'var(--space-3)' }}>
-            <label>
-              Причина
-              <select className="input" value={correctionReasonId || ''}
-                onChange={(e) => setCorrectionReasonId(e.target.value ? Number(e.target.value) : null)}>
-                <option value="">— не указана —</option>
-                {correctionReasonsList.map((r) => (
-                  <option key={r.id} value={r.id}>{r.label}</option>
-                ))}
-              </select>
-            </label>
-          </div>
-        )}
-
-        {/* Items */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-          <p style={{ margin: 0, fontWeight: 500 }}>Позиции:</p>
-          {correctionItems.map((item, idx) => (
-            <div key={idx} style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'center' }}>
-              <select className="input" style={{ flex: 2 }}
-                value={item.productId}
-                onChange={(e) => {
-                  const prod = (productsQuery.data || []).find((p) => String(p.id) === e.target.value);
-                  setCorrectionItems((prev) => prev.map((ci, i) => i === idx
-                    ? { ...ci, productId: e.target.value, productName: prod?.name || '', productSku: prod?.sku || '' }
-                    : ci
-                  ));
-                }}>
-                <option value="">— выберите товар —</option>
-                {(productsQuery.data || []).map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.sku})</option>
-                ))}
-              </select>
-              <input className="input" type="number" min={1} style={{ width: 80 }}
-                value={item.quantity}
-                onChange={(e) => setCorrectionItems((prev) => prev.map((ci, i) => i === idx ? { ...ci, quantity: Number(e.target.value) } : ci))} />
-              <button className="btn btn-danger" type="button" style={{ padding: '4px 8px' }}
-                onClick={() => setCorrectionItems((prev) => prev.filter((_, i) => i !== idx))}>✕</button>
-            </div>
-          ))}
-          <button className="btn" type="button"
-            onClick={() => setCorrectionItems((prev) => [...prev, { productId: '', quantity: 1, productName: '', productSku: '' }])}>
-            + Добавить позицию
-          </button>
-        </div>
       </Modal>
 
     </div>

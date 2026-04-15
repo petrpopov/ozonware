@@ -13,6 +13,7 @@ const TABS = [
   { id: 'gsheets', label: 'Google Sheets' },
   { id: 'ozon', label: 'OZON' },
   { id: 'dicts', label: 'Словари' },
+  { id: 'receipt', label: 'Приёмка' },
   { id: 'danger', label: 'Дополнительно' }
 ];
 
@@ -41,7 +42,7 @@ export default function SettingsPage() {
   useRouteRefetch(ozonQuery.refetch);
 
   const [fields, setFields] = useState([]);
-  const [google, setGoogle] = useState({ spreadsheetId: '', sheetName: 'Лист1', skuColumn: 'A', quantityColumn: 'B', startRow: 2 });
+  const [google, setGoogle] = useState({ spreadsheetId: '', sheetName: 'Лист1', skuColumn: 'A', quantityColumn: 'I', startRow: 2, categoryColumn: 'C', colorNameColumn: 'D', colorCodeColumn: 'B', swatchColumn: 'E', hexColumn: 'F' });
   const [ozon, setOzon] = useState({ clientId: '', apiKey: '', syncStartDate: '' });
   const [ozonStats, setOzonStats] = useState([]);
   const ozonSyncDateRef = useRef(null);
@@ -134,7 +135,12 @@ export default function SettingsPage() {
 
   const syncGoogleMutation = useMutation({
     mutationFn: () => services.syncGoogle(google),
-    onSuccess: (result) => pushToast(`Синхронизировано строк: ${result.updated || 0}`, 'success'),
+    onSuccess: (result) => {
+      const parts = [`Обновлено: ${result.updated ?? 0}`];
+      if ((result.appended ?? 0) > 0) parts.push(`добавлено: ${result.appended}`);
+      if ((result.notFound ?? 0) > 0) parts.push(`не найдено: ${result.notFound}`);
+      pushToast(parts.join(' / '), 'success');
+    },
     onError: (error) => pushToast(error.message, 'error')
   });
 
@@ -173,6 +179,25 @@ export default function SettingsPage() {
     onError: (error) => pushToast(error.message, 'error')
   });
 
+
+  // --- Receipt tab state ---
+  const boxSettingQuery = useQuery({ queryKey: ['app-setting', 'receipt_default_box_size'], queryFn: () => services.getAppSetting('receipt_default_box_size') });
+  const [receiptBoxSizeInput, setReceiptBoxSizeInput] = useState('');
+
+  useEffect(() => {
+    if (boxSettingQuery.data != null) {
+      setReceiptBoxSizeInput(String(boxSettingQuery.data));
+    }
+  }, [boxSettingQuery.data]);
+
+  const saveBoxSizeMutation = useMutation({
+    mutationFn: (value) => services.saveAppSetting('receipt_default_box_size', value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['app-setting', 'receipt_default_box_size'] });
+      pushToast('Сохранено', 'success');
+    },
+    onError: (e) => pushToast(e.message, 'error')
+  });
 
   // --- Dict tab state ---
   const [dictEditId, setDictEditId] = useState(null);
@@ -428,11 +453,67 @@ export default function SettingsPage() {
                 onChange={(e) => setGoogle((s) => ({ ...s, startRow: Number(e.target.value || 2) }))}
               />
             </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Колонка категории</span>
+              <input
+                className="input"
+                value={google.categoryColumn || 'B'}
+                onChange={(e) => setGoogle((s) => ({ ...s, categoryColumn: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Колонка названия цвета</span>
+              <input
+                className="input"
+                value={google.colorNameColumn || 'C'}
+                onChange={(e) => setGoogle((s) => ({ ...s, colorNameColumn: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Колонка кода цвета</span>
+              <input
+                className="input"
+                value={google.colorCodeColumn || 'A'}
+                onChange={(e) => setGoogle((s) => ({ ...s, colorCodeColumn: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Колонка заливки цвета</span>
+              <input
+                className="input"
+                value={google.swatchColumn || 'D'}
+                onChange={(e) => setGoogle((s) => ({ ...s, swatchColumn: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Колонка HEX</span>
+              <input
+                className="input"
+                value={google.hexColumn || 'E'}
+                onChange={(e) => setGoogle((s) => ({ ...s, hexColumn: e.target.value }))}
+              />
+            </div>
           </div>
           <div className="settings-form-actions">
-            <button type="button" className="btn" onClick={() => testGoogleMutation.mutate()}>Проверить</button>
-            <button type="button" className="btn" onClick={() => syncGoogleMutation.mutate()}>Синхронизировать</button>
-            <button type="button" className="btn btn-primary" onClick={() => saveGoogleMutation.mutate()}>Сохранить</button>
+            <button
+              type="button"
+              className="btn"
+              disabled={testGoogleMutation.isPending || syncGoogleMutation.isPending}
+              onClick={() => testGoogleMutation.mutate()}
+            >
+              {testGoogleMutation.isPending && <span className="spinner" />}
+              {testGoogleMutation.isPending ? 'Проверка...' : 'Проверить'}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={syncGoogleMutation.isPending || testGoogleMutation.isPending}
+              onClick={() => syncGoogleMutation.mutate()}
+            >
+              {syncGoogleMutation.isPending && <span className="spinner" />}
+              {syncGoogleMutation.isPending ? 'Синхронизация...' : 'Синхронизировать'}
+            </button>
+            <button type="button" className="btn" onClick={() => saveGoogleMutation.mutate()}>Сохранить</button>
           </div>
         </div>
       )}
@@ -634,6 +715,38 @@ export default function SettingsPage() {
               + Добавить причину корректировки
             </button>
           )}
+        </div>
+      )}
+
+      {activeTab === 'receipt' && (
+        <div className="stack-sm">
+          <h4>Приёмка по коробкам</h4>
+          <p className="import-subtitle">
+            Дефолтный размер коробки используется в режиме «По коробкам», если для конкретного товара не задано значение «Шт в коробке».
+          </p>
+          <label style={{ maxWidth: '240px' }}>
+            Дефолтный размер коробки (шт)
+            <input
+              className="input"
+              type="number"
+              min="1"
+              placeholder="10"
+              value={receiptBoxSizeInput}
+              onChange={(e) => setReceiptBoxSizeInput(e.target.value)}
+            />
+          </label>
+          <button
+            className="btn btn-primary"
+            type="button"
+            disabled={saveBoxSizeMutation.isPending}
+            onClick={() => {
+              const val = Number(receiptBoxSizeInput);
+              if (!val || val < 1) { pushToast('Введите корректное число', 'error'); return; }
+              saveBoxSizeMutation.mutate(val);
+            }}
+          >
+            {saveBoxSizeMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+          </button>
         </div>
       )}
 

@@ -62,14 +62,15 @@ class ProductService(
     }
 
     fun toResponse(product: Product): Map<String, Any?> = mapOf(
-        "id"          to product.id,
-        "name"        to product.name,
-        "sku"         to product.sku,
-        "quantity"    to product.quantity,
-        "description" to product.description,
-        "custom_fields" to productFieldsService.readCustomFields(product.id!!),
-        "created_at"  to product.createdAt?.toString(),
-        "updated_at"  to product.updatedAt?.toString()
+        "id"               to product.id,
+        "name"             to product.name,
+        "sku"              to product.sku,
+        "quantity"         to product.quantity,
+        "description"      to product.description,
+        "default_box_size" to product.defaultBoxSize,
+        "custom_fields"    to productFieldsService.readCustomFields(product.id!!),
+        "created_at"       to product.createdAt?.toString(),
+        "updated_at"       to product.updatedAt?.toString()
     )
 
     fun findById(id: Long): Product {
@@ -84,6 +85,7 @@ class ProductService(
         sku: String,
         quantity: Int = 0,
         description: String = "",
+        defaultBoxSize: Int? = null,
         customFields: List<Map<String, Any>> = emptyList()
     ): Product {
         return try {
@@ -91,7 +93,8 @@ class ProductService(
                 name = name,
                 sku = sku,
                 quantity = quantity,
-                description = description
+                description = description,
+                defaultBoxSize = defaultBoxSize
             )
             val saved = productRepository.save(product)
             productFieldsService.syncFieldValues(saved.id!!, customFields)
@@ -108,6 +111,7 @@ class ProductService(
         sku: String,
         quantity: Int,
         description: String,
+        defaultBoxSize: Int? = null,
         customFields: List<Map<String, Any>>
     ): Product {
         return try {
@@ -116,6 +120,7 @@ class ProductService(
             product.sku = sku
             product.quantity = quantity
             product.description = description
+            product.defaultBoxSize = defaultBoxSize
             val saved = productRepository.save(product)
             productFieldsService.syncFieldValues(saved.id!!, customFields)
             saved

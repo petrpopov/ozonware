@@ -10,9 +10,10 @@ import com.ozonware.repository.OperationRepository
 import com.ozonware.repository.PlannedSupplyItemRepository
 import com.ozonware.repository.PlannedSupplyRepository
 import com.ozonware.repository.ProductRepository
+import io.github.perplexhub.rsql.RSQLJPASupport
 import org.slf4j.LoggerFactory
-import org.springframework.data.domain.PageRequest
-import org.springframework.data.domain.Sort
+import org.springframework.data.domain.Pageable
+import org.springframework.data.jpa.domain.Specification
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -57,29 +58,42 @@ class PlannedSupplyService(
         return buildResponse(supply, items)
     }
 
-    fun listSupplies(includeClosed: Boolean, page: Int, size: Int): Map<String, Any?> {
-        val pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"))
-        val result = if (includeClosed) {
+    fun listSupplies(filter: String?, pageable: Pageable): Map<String, Any?> {
+        val spec: Specification<PlannedSupply>? = filter?.let { RSQLJPASupport.toSpecification(it) }
+        val page = if (spec != null)
+            plannedSupplyRepository.findAll(spec, pageable)
+        else
             plannedSupplyRepository.findAll(pageable)
-        } else {
-            plannedSupplyRepository.findAllByStatusNot(STATUS_CLOSED, pageable)
-        }
 
-        val ids = result.content.mapNotNull { supply -> supply.id }
-        val itemsBySupplyId = plannedSupplyItemRepository
-            .findAllByPlannedSupplyIdIn(ids)
-            .groupBy { item -> item.plannedSupplyId }
+        val ids = page.content.mapNotNull { supply -> supply.id }
+        val itemCountBySupplyId = if (ids.isNotEmpty())
+            plannedSupplyItemRepository.findAllByPlannedSupplyIdIn(ids)
+                .groupBy { item -> item.plannedSupplyId }
+                .mapValues { entry -> entry.value.size }
+        else emptyMap()
+        val receiptCountBySupplyId = if (ids.isNotEmpty())
+            operationRepository.findAllByPlannedSupplyIdIn(ids)
+                .groupBy { op -> op.plannedSupplyId }
+                .mapValues { entry -> entry.value.size }
+        else emptyMap()
 
         return mapOf(
-            "content" to result.content.map { supply ->
-                buildResponse(supply, itemsBySupplyId[supply.id!!] ?: emptyList())
+            "items" to page.content.map { supply ->
+                mapOf(
+                    "id" to supply.id,
+                    "title" to supply.title,
+                    "supplier" to supply.supplier,
+                    "planned_date" to supply.plannedDate?.toString(),
+                    "status" to supply.status,
+                    "created_at" to supply.createdAt?.toString(),
+                    "updated_at" to supply.updatedAt?.toString(),
+                    "item_count" to (itemCountBySupplyId[supply.id] ?: 0),
+                    "receipt_count" to (receiptCountBySupplyId[supply.id] ?: 0)
+                )
             },
-            "page" to mapOf(
-                "number" to result.number,
-                "size" to result.size,
-                "totalElements" to result.totalElements,
-                "totalPages" to result.totalPages
-            )
+            "total" to page.totalElements.toInt(),
+            "limit" to pageable.pageSize,
+            "offset" to (pageable.pageNumber * pageable.pageSize)
         )
     }
 
@@ -88,8 +102,22 @@ class PlannedSupplyService(
             .orElseThrow { ResourceNotFoundException("PlannedSupply not found: $id") }
         val items = plannedSupplyItemRepository.findAllByPlannedSupplyId(id)
         val operations = operationRepository.findByPlannedSupplyId(id)
+
+        val directOpIds = operations.mapNotNull { op -> op.id }
+        val correctionOps = if (directOpIds.isNotEmpty())
+            operationRepository.findAllByParentOperationIdIn(directOpIds)
+        else emptyList()
+        val correctionsByParentId = correctionOps.groupBy { corr -> corr.parentOperationId }
+
+        val correctionOpIds = correctionOps.mapNotNull { corr -> corr.id }
+        val allOpIds = directOpIds + correctionOpIds
+        val itemsByOpId = if (allOpIds.isNotEmpty())
+            operationItemRepository.findAllByOperationIdIn(allOpIds).groupBy { opItem -> opItem.operationId }
+        else emptyMap()
+
         val operationsResponse = operations.map { op ->
-            val corrections = operationRepository.findByParentOperationId(op.id!!)
+            val corrections = correctionsByParentId[op.id] ?: emptyList()
+            val opItems = itemsByOpId[op.id] ?: emptyList()
             mapOf(
                 "id" to op.id,
                 "type_code" to op.typeCode,
@@ -98,12 +126,31 @@ class PlannedSupplyService(
                 "note" to op.note,
                 "total_quantity" to op.totalQuantity,
                 "created_at" to op.createdAt?.toString(),
+                "items" to opItems.map { opItem ->
+                    mapOf(
+                        "product_id" to opItem.productId,
+                        "sku" to opItem.productSkuSnapshot,
+                        "product_name" to opItem.productNameSnapshot,
+                        "quantity" to (opItem.delta?.toInt() ?: 0)
+                    )
+                },
                 "corrections" to corrections.map { corr ->
+                    val corrItems = itemsByOpId[corr.id] ?: emptyList()
                     mapOf(
                         "id" to corr.id,
                         "type_code" to corr.typeCode,
                         "note" to corr.note,
-                        "total_quantity" to corr.totalQuantity
+                        "operation_date" to corr.operationDate?.toString(),
+                        "correction_reason_id" to corr.correctionReasonId,
+                        "total_quantity" to corr.totalQuantity,
+                        "items" to corrItems.map { opItem ->
+                            mapOf(
+                                "product_id" to opItem.productId,
+                                "sku" to opItem.productSkuSnapshot,
+                                "product_name" to opItem.productNameSnapshot,
+                                "quantity" to (opItem.delta?.toInt() ?: 0)
+                            )
+                        }
                     )
                 }
             )
@@ -209,7 +256,7 @@ class PlannedSupplyService(
         val factualBySku = mutableMapOf<String, Int>()
         for (opItem in allOpItems) {
             val delta = opItem.delta?.toInt() ?: 0
-            if (delta > 0) {
+            if (delta != 0) {
                 factualBySku.merge(opItem.productSkuSnapshot, delta, Int::plus)
             }
         }

@@ -119,10 +119,10 @@ const STATUS_LABELS = {
 };
 
 const STATUS_COLORS = {
-  planned: 'var(--color-muted)',
+  planned: 'var(--color-info)',
   partial: 'var(--color-warning)',
   matched: 'var(--color-success)',
-  closed: 'var(--color-muted)',
+  closed: 'var(--text-muted)',
 };
 
 function statusBadge(status) {

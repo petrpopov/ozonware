@@ -11,7 +11,8 @@ database/backups/
 database/backup_*.sql
 
 # Secrets
-backend/google-credentials.json
+backend-kotlin/google-credentials.json
+backend-kotlin/src/main/resources/google-credentials.json
 
 # Build output
 frontend/dist/
@@ -25,3 +26,4 @@ source_data/
 .playwright-cli/
 .gitnexus
 .worktrees/
+.gstack/
