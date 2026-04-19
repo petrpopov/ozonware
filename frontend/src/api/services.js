@@ -88,4 +88,5 @@ export const services = {
   updatePlannedSupply: (id, payload) => api.put(`/planned-supplies/${id}`, payload),
   deletePlannedSupply: (id) => api.del(`/planned-supplies/${id}`),
   closePlannedSupply: (id, note) => api.post(`/planned-supplies/${id}/close`, { note }),
+  updatePlannedSupplyDates: (id, purchaseDate, expectedDate) => api.patch(`/planned-supplies/${id}/dates`, { purchase_date: purchaseDate || null, expected_date: expectedDate || null }),
 };

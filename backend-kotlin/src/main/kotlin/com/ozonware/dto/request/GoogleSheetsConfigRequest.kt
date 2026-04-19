@@ -10,5 +10,7 @@ data class GoogleSheetsConfigRequest(
     val colorNameColumn: String = "D",
     val colorCodeColumn: String = "B",
     val swatchColumn: String = "E",
-    val hexColumn: String = "F"
+    val hexColumn: String = "F",
+    val deliveryDateColumn: String? = null,
+    val expectedColumn: String? = null
 )

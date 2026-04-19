@@ -17,7 +17,7 @@ class PlannedSupplyController(
     @GetMapping
     fun list(
         @RequestParam(required = false) filter: String?,
-        @PageableDefault(size = 20, sort = ["plannedDate"], direction = Sort.Direction.DESC) pageable: Pageable
+        @PageableDefault(size = 20, sort = ["purchaseDate"], direction = Sort.Direction.DESC) pageable: Pageable
     ): ResponseEntity<Map<String, Any?>> =
         ResponseEntity.ok(plannedSupplyService.listSupplies(filter, pageable))
 
@@ -45,6 +45,13 @@ class PlannedSupplyController(
 
         return ResponseEntity.ok(mapOf("message" to "Supply deleted"))
     }
+
+    @PatchMapping("/{id}/dates")
+    fun updateDates(
+        @PathVariable id: Long,
+        @RequestBody body: Map<String, String?>
+    ): ResponseEntity<Map<String, Any?>> =
+        ResponseEntity.ok(plannedSupplyService.updateDates(id, body["purchase_date"], body["expected_date"]))
 
     @PostMapping("/{id}/close")
     fun close(

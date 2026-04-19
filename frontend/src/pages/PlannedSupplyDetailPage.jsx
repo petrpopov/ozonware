@@ -146,6 +146,10 @@ export default function PlannedSupplyDetailPage() {
   const [closeNote, setCloseNote] = useState('');
   const [closePromptOpen, setClosePromptOpen] = useState(false);
 
+  const [datesEditOpen, setDatesEditOpen] = useState(false);
+  const [editPurchaseDate, setEditPurchaseDate] = useState('');
+  const [editExpectedDate, setEditExpectedDate] = useState('');
+
   // Correction state
   const [corrOpen, setCorrOpen] = useState(false);
   const [corrEditId, setCorrEditId] = useState(null); // null = create, number = edit
@@ -300,6 +304,17 @@ export default function PlannedSupplyDetailPage() {
     onError: (err) => pushToast(err.message || 'Ошибка', 'error'),
   });
 
+  const datesMutation = useMutation({
+    mutationFn: () => services.updatePlannedSupplyDates(id, editPurchaseDate, editExpectedDate),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['planned-supply', id] });
+      queryClient.invalidateQueries({ queryKey: ['planned-supplies'] });
+      pushToast('Даты обновлены', 'success');
+      setDatesEditOpen(false);
+    },
+    onError: (err) => pushToast(err.message || 'Ошибка', 'error'),
+  });
+
   const supply = supplyQuery.data;
 
   // Build fact quantities map from receipts and their corrections
@@ -349,6 +364,13 @@ export default function PlannedSupplyDetailPage() {
       <div className="toolbar">
         <button className="btn" onClick={() => navigate('/planned-supplies')}>← К поставкам</button>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          {!datesEditOpen && (
+            <button className="btn" onClick={() => {
+              setEditPurchaseDate(supply.purchase_date || '');
+              setEditExpectedDate(supply.expected_date || '');
+              setDatesEditOpen(true);
+            }}>Изменить даты</button>
+          )}
           {supply.status !== 'closed' && !closePromptOpen && (
             <button className="btn" onClick={() => setClosePromptOpen(true)}>Закрыть поставку</button>
           )}
@@ -367,12 +389,14 @@ export default function PlannedSupplyDetailPage() {
             <p style={{ margin: 0 }}>{supply.supplier}</p>
           </div>
         )}
-        {supply.planned_date && (
-          <div>
-            <p style={{ margin: '0 0 2px', fontSize: '12px', color: 'var(--color-muted)' }}>Плановая дата</p>
-            <p style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>{supply.planned_date}</p>
-          </div>
-        )}
+        <div>
+          <p style={{ margin: '0 0 2px', fontSize: '12px', color: 'var(--color-muted)' }}>Дата закупки</p>
+          <p style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>{supply.purchase_date || '—'}</p>
+        </div>
+        <div>
+          <p style={{ margin: '0 0 2px', fontSize: '12px', color: 'var(--color-muted)' }}>Ожидается</p>
+          <p style={{ margin: 0, fontFamily: 'var(--font-mono)' }}>{supply.expected_date || '—'}</p>
+        </div>
         <div>
           <p style={{ margin: '0 0 2px', fontSize: '12px', color: 'var(--color-muted)' }}>Статус</p>
           <p style={{ margin: 0 }}>{statusBadge(supply.status)}</p>
@@ -389,6 +413,48 @@ export default function PlannedSupplyDetailPage() {
         <p style={{ margin: 0, fontSize: '13px', color: 'var(--color-muted)', fontStyle: 'italic' }}>
           {supply.note}
         </p>
+      )}
+
+      {/* Dates edit (inline) */}
+      {datesEditOpen && (
+        <div style={{ padding: '12px', border: '1px solid var(--color-border)', borderRadius: '6px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', color: 'var(--color-muted)' }}>
+                Дата закупки
+              </label>
+              <input
+                className="input"
+                type="date"
+                style={{ width: '100%' }}
+                value={editPurchaseDate}
+                onChange={(e) => setEditPurchaseDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', color: 'var(--color-muted)' }}>
+                Ожидается
+              </label>
+              <input
+                className="input"
+                type="date"
+                style={{ width: '100%' }}
+                value={editExpectedDate}
+                onChange={(e) => setEditExpectedDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              className="btn btn-primary"
+              onClick={() => datesMutation.mutate()}
+              disabled={datesMutation.isPending}
+            >
+              {datesMutation.isPending ? 'Сохранение...' : 'Сохранить'}
+            </button>
+            <button className="btn" onClick={() => setDatesEditOpen(false)}>Отмена</button>
+          </div>
+        </div>
       )}
 
       {/* Close prompt (inline) */}

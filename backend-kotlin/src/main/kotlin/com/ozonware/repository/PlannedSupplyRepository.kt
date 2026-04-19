@@ -12,6 +12,8 @@ interface PlannedSupplyRepository : JpaRepository<PlannedSupply, Long>, JpaSpeci
 
     fun findAllByStatusNot(status: String, pageable: Pageable): Page<PlannedSupply>
 
+    fun findAllByStatusNot(status: String): List<PlannedSupply>
+
     fun findAllByStatus(status: String, pageable: Pageable): Page<PlannedSupply>
 
     fun existsByIdAndStatusNot(id: Long, status: String): Boolean

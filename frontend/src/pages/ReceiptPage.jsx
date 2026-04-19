@@ -655,7 +655,7 @@ export default function ReceiptPage() {
               >
                 <option value="">— Без привязки —</option>
                 {availablePlansForImport.map((plan) => (
-                  <option key={plan.id} value={plan.id}>{plan.title} {plan.planned_date ? `(${plan.planned_date})` : ''}</option>
+                  <option key={plan.id} value={plan.id}>{plan.title} {(plan.expected_date || plan.purchase_date) ? `(${plan.expected_date || plan.purchase_date})` : ''}</option>
                 ))}
               </select>
             </div>

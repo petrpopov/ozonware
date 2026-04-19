@@ -5,7 +5,8 @@ import com.fasterxml.jackson.annotation.JsonProperty
 data class PlannedSupplyCreateRequest(
     val title: String = "",
     val supplier: String? = null,
-    @JsonProperty("planned_date") val plannedDate: String? = null,
+    @JsonProperty("purchase_date") val purchaseDate: String? = null,
+    @JsonProperty("expected_date") val expectedDate: String? = null,
     val note: String? = null,
     @JsonProperty("source_file") val sourceFile: String? = null,
     val items: List<ItemRequest> = emptyList()

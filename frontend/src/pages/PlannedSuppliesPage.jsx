@@ -40,14 +40,15 @@ export default function PlannedSuppliesPage() {
   const [createMode, setCreateMode] = useState('manual');
 
   const [statusKey, setStatusKey] = useState('all');
-  const [sort, setSort] = useState({ key: 'plannedDate', dir: 'desc' });
+  const [sort, setSort] = useState({ key: 'purchaseDate', dir: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
 
   // Manual form state
   const [title, setTitle] = useState('');
   const [supplier, setSupplier] = useState('');
-  const [plannedDate, setPlannedDate] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState('');
+  const [expectedDate, setExpectedDate] = useState('');
   const [note, setNote] = useState('');
   const [items, setItems] = useState([emptyItem()]);
 
@@ -56,7 +57,8 @@ export default function PlannedSuppliesPage() {
   const [excelFileName, setExcelFileName] = useState('');
   const [excelTitle, setExcelTitle] = useState('');
   const [excelSupplier, setExcelSupplier] = useState('');
-  const [excelDate, setExcelDate] = useState('');
+  const [excelPurchaseDate, setExcelPurchaseDate] = useState('');
+  const [excelExpectedDate, setExcelExpectedDate] = useState('');
   const [excelNote, setExcelNote] = useState('');
 
   const rsqlFilter = statusKey === 'all' ? null : `status==${statusKey}`;
@@ -111,14 +113,16 @@ export default function PlannedSuppliesPage() {
   function resetForm() {
     setTitle('');
     setSupplier('');
-    setPlannedDate('');
+    setPurchaseDate('');
+    setExpectedDate('');
     setNote('');
     setItems([emptyItem()]);
     setExcelItems([]);
     setExcelFileName('');
     setExcelTitle('');
     setExcelSupplier('');
-    setExcelDate('');
+    setExcelPurchaseDate('');
+    setExcelExpectedDate('');
     setExcelNote('');
   }
 
@@ -179,7 +183,8 @@ export default function PlannedSuppliesPage() {
     const payload = {
       title: finalTitle,
       supplier: (isExcel ? excelSupplier : supplier).trim() || null,
-      planned_date: (isExcel ? excelDate : plannedDate) || null,
+      purchase_date: (isExcel ? excelPurchaseDate : purchaseDate) || null,
+      expected_date: (isExcel ? excelExpectedDate : expectedDate) || null,
       note: (isExcel ? excelNote : note).trim() || null,
       source_file: isExcel ? excelFileName || null : null,
       items: finalItems,
@@ -242,7 +247,8 @@ export default function PlannedSuppliesPage() {
               <tr>
                 <th className="sortable" onClick={() => toggleSort('title')}>Название <span>{renderSortMark('title')}</span></th>
                 <th className="sortable" onClick={() => toggleSort('supplier')}>Поставщик <span>{renderSortMark('supplier')}</span></th>
-                <th className="sortable" onClick={() => toggleSort('plannedDate')}>Дата <span>{renderSortMark('plannedDate')}</span></th>
+                <th className="sortable" onClick={() => toggleSort('purchaseDate')}>Закупка <span>{renderSortMark('purchaseDate')}</span></th>
+                <th className="sortable" onClick={() => toggleSort('expectedDate')}>Ожидается <span>{renderSortMark('expectedDate')}</span></th>
                 <th className="sortable" onClick={() => toggleSort('status')}>Статус <span>{renderSortMark('status')}</span></th>
                 <th>Позиций</th>
                 <th>Приёмок</th>
@@ -252,7 +258,7 @@ export default function PlannedSuppliesPage() {
             <tbody>
               {supplies.length === 0 && (
                 <tr>
-                  <td colSpan={7} style={{ color: 'var(--color-muted)', textAlign: 'center' }}>
+                  <td colSpan={8} style={{ color: 'var(--color-muted)', textAlign: 'center' }}>
                     Нет поставок
                   </td>
                 </tr>
@@ -265,7 +271,8 @@ export default function PlannedSuppliesPage() {
                 >
                   <td>{supply.title}</td>
                   <td>{supply.supplier || '—'}</td>
-                  <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.planned_date || '—'}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.purchase_date || '—'}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.expected_date || '—'}</td>
                   <td>{statusBadge(supply.status)}</td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.item_count ?? 0}</td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.receipt_count ?? 0}</td>
@@ -327,7 +334,7 @@ export default function PlannedSuppliesPage() {
                 placeholder="Название плана"
               />
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', color: 'var(--color-muted)' }}>
                   Поставщик
@@ -342,14 +349,26 @@ export default function PlannedSuppliesPage() {
               </div>
               <div>
                 <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', color: 'var(--color-muted)' }}>
-                  Плановая дата
+                  Дата закупки
                 </label>
                 <input
                   className="input"
                   type="date"
                   style={{ width: '100%' }}
-                  value={plannedDate}
-                  onChange={(e) => setPlannedDate(e.target.value)}
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', color: 'var(--color-muted)' }}>
+                  Ожидается
+                </label>
+                <input
+                  className="input"
+                  type="date"
+                  style={{ width: '100%' }}
+                  value={expectedDate}
+                  onChange={(e) => setExpectedDate(e.target.value)}
                 />
               </div>
             </div>
@@ -462,7 +481,7 @@ export default function PlannedSuppliesPage() {
                     placeholder="Название плана"
                   />
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                   <div>
                     <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', color: 'var(--color-muted)' }}>
                       Поставщик
@@ -477,14 +496,26 @@ export default function PlannedSuppliesPage() {
                   </div>
                   <div>
                     <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', color: 'var(--color-muted)' }}>
-                      Плановая дата
+                      Дата закупки
                     </label>
                     <input
                       className="input"
                       type="date"
                       style={{ width: '100%' }}
-                      value={excelDate}
-                      onChange={(e) => setExcelDate(e.target.value)}
+                      value={excelPurchaseDate}
+                      onChange={(e) => setExcelPurchaseDate(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', color: 'var(--color-muted)' }}>
+                      Ожидается
+                    </label>
+                    <input
+                      className="input"
+                      type="date"
+                      style={{ width: '100%' }}
+                      value={excelExpectedDate}
+                      onChange={(e) => setExcelExpectedDate(e.target.value)}
                     />
                   </div>
                 </div>

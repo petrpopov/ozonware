@@ -67,7 +67,9 @@ class GoogleSheetsController(
             colorNameColumn = req.colorNameColumn,
             colorCodeColumn = req.colorCodeColumn,
             swatchColumn = req.swatchColumn,
-            hexColumn = req.hexColumn
+            hexColumn = req.hexColumn,
+            deliveryDateColumn = req.deliveryDateColumn,
+            expectedColumn = req.expectedColumn
         )
 
         return ResponseEntity.ok(result)

@@ -45,7 +45,8 @@ class PlannedSupplyService(
             PlannedSupply(
                 title = req.title,
                 supplier = req.supplier,
-                plannedDate = req.plannedDate?.let { dateStr -> LocalDate.parse(dateStr) },
+                purchaseDate = req.purchaseDate?.let { dateStr -> LocalDate.parse(dateStr) },
+                expectedDate = req.expectedDate?.let { dateStr -> LocalDate.parse(dateStr) },
                 note = req.note,
                 sourceFile = req.sourceFile,
                 status = STATUS_PLANNED,
@@ -83,7 +84,8 @@ class PlannedSupplyService(
                     "id" to supply.id,
                     "title" to supply.title,
                     "supplier" to supply.supplier,
-                    "planned_date" to supply.plannedDate?.toString(),
+                    "purchase_date" to supply.purchaseDate?.toString(),
+                    "expected_date" to supply.expectedDate?.toString(),
                     "status" to supply.status,
                     "created_at" to supply.createdAt?.toString(),
                     "updated_at" to supply.updatedAt?.toString(),
@@ -176,7 +178,8 @@ class PlannedSupplyService(
 
         supply.title = req.title
         supply.supplier = req.supplier
-        supply.plannedDate = req.plannedDate?.let { dateStr -> LocalDate.parse(dateStr) }
+        supply.purchaseDate = req.purchaseDate?.let { dateStr -> LocalDate.parse(dateStr) }
+        supply.expectedDate = req.expectedDate?.let { dateStr -> LocalDate.parse(dateStr) }
         supply.note = req.note
         supply.sourceFile = req.sourceFile
         supply.updatedAt = LocalDateTime.now()
@@ -199,6 +202,21 @@ class PlannedSupplyService(
         }
 
         plannedSupplyRepository.delete(supply)
+    }
+
+    @Transactional
+    fun updateDates(id: Long, purchaseDateStr: String?, expectedDateStr: String?): Map<String, Any?> {
+        val supply = plannedSupplyRepository.findById(id)
+            .orElseThrow { ResourceNotFoundException("PlannedSupply not found: $id") }
+
+        supply.purchaseDate = purchaseDateStr?.takeIf { it.isNotBlank() }?.let { LocalDate.parse(it) }
+        supply.expectedDate = expectedDateStr?.takeIf { it.isNotBlank() }?.let { LocalDate.parse(it) }
+        supply.updatedAt = LocalDateTime.now()
+        plannedSupplyRepository.save(supply)
+
+        val items = plannedSupplyItemRepository.findAllByPlannedSupplyId(id)
+
+        return buildResponse(supply, items)
     }
 
     @Transactional
@@ -276,12 +294,39 @@ class PlannedSupplyService(
         }
     }
 
+    data class OpenSupplyInfo(val expectedDate: LocalDate?, val totalQuantity: Int)
+
+    fun findSkusWithOpenSupplies(): Map<String, OpenSupplyInfo> {
+        val openSupplies = plannedSupplyRepository.findAllByStatusNot(STATUS_CLOSED)
+        if (openSupplies.isEmpty()) return emptyMap()
+
+        val supplyById = openSupplies.associateBy { it.id!! }
+        val supplyIds = supplyById.keys
+        val items = plannedSupplyItemRepository.findAllByPlannedSupplyIdIn(supplyIds)
+
+        val result = mutableMapOf<String, Pair<LocalDate?, Int>>()
+        for (item in items) {
+            val supply = supplyById[item.plannedSupplyId] ?: continue
+            val existing = result[item.sku]
+            val newQty = (existing?.second ?: 0) + item.plannedQuantity
+            val newDate = when {
+                existing?.first == null -> supply.expectedDate
+                supply.expectedDate == null -> existing.first
+                else -> minOf(existing.first!!, supply.expectedDate!!)
+            }
+            result[item.sku] = newDate to newQty
+        }
+
+        return result.mapValues { (_, v) -> OpenSupplyInfo(v.first, v.second) }
+    }
+
     private fun buildResponse(supply: PlannedSupply, items: List<PlannedSupplyItem>): Map<String, Any?> {
         return mapOf(
             "id" to supply.id,
             "title" to supply.title,
             "supplier" to supply.supplier,
-            "planned_date" to supply.plannedDate?.toString(),
+            "purchase_date" to supply.purchaseDate?.toString(),
+            "expected_date" to supply.expectedDate?.toString(),
             "source_file" to supply.sourceFile,
             "note" to supply.note,
             "status" to supply.status,

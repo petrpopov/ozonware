@@ -42,7 +42,7 @@ export default function SettingsPage() {
   useRouteRefetch(ozonQuery.refetch);
 
   const [fields, setFields] = useState([]);
-  const [google, setGoogle] = useState({ spreadsheetId: '', sheetName: 'Лист1', skuColumn: 'A', quantityColumn: 'I', startRow: 2, categoryColumn: 'C', colorNameColumn: 'D', colorCodeColumn: 'B', swatchColumn: 'E', hexColumn: 'F' });
+  const [google, setGoogle] = useState({ spreadsheetId: '', sheetName: 'Лист1', skuColumn: 'A', quantityColumn: 'I', startRow: 2, categoryColumn: 'C', colorNameColumn: 'D', colorCodeColumn: 'B', swatchColumn: 'E', hexColumn: 'F', deliveryDateColumn: '', expectedColumn: '' });
   const [ozon, setOzon] = useState({ clientId: '', apiKey: '', syncStartDate: '' });
   const [ozonStats, setOzonStats] = useState([]);
   const ozonSyncDateRef = useRef(null);
@@ -491,6 +491,24 @@ export default function SettingsPage() {
                 className="input"
                 value={google.hexColumn || 'E'}
                 onChange={(e) => setGoogle((s) => ({ ...s, hexColumn: e.target.value }))}
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Колонка Дата поставки</span>
+              <input
+                className="input"
+                value={google.deliveryDateColumn || ''}
+                onChange={(e) => setGoogle((s) => ({ ...s, deliveryDateColumn: e.target.value || null }))}
+                placeholder="Не задана"
+              />
+            </div>
+            <div className="settings-form-field">
+              <span className="settings-form-label">Колонка Ожидается</span>
+              <input
+                className="input"
+                value={google.expectedColumn || ''}
+                onChange={(e) => setGoogle((s) => ({ ...s, expectedColumn: e.target.value || null }))}
+                placeholder="Не задана"
               />
             </div>
           </div>

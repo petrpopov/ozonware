@@ -20,6 +20,7 @@ import com.ozonware.repository.ProductFieldRepository
 import com.ozonware.repository.ProductFieldValueRepository
 import com.ozonware.repository.ProductRepository
 import org.slf4j.LoggerFactory
+import org.springframework.context.annotation.Lazy
 import org.springframework.stereotype.Service
 
 /** Google Sheets integration — matches products by SKU, updates quantity, appends missing rows within their category block. */
@@ -28,7 +29,8 @@ class GoogleSheetsService(
     private val sheets: Sheets?,
     private val productRepository: ProductRepository,
     private val productFieldValueRepository: ProductFieldValueRepository,
-    private val productFieldRepository: ProductFieldRepository
+    private val productFieldRepository: ProductFieldRepository,
+    @Lazy private val plannedSupplyService: PlannedSupplyService
 ) {
     companion object {
         private val log = LoggerFactory.getLogger(GoogleSheetsService::class.java)
@@ -66,7 +68,9 @@ class GoogleSheetsService(
         colorNameColumn: String = "D",
         colorCodeColumn: String = "B",
         swatchColumn: String = "E",
-        hexColumn: String = "F"
+        hexColumn: String = "F",
+        deliveryDateColumn: String? = null,
+        expectedColumn: String? = null
     ): Map<String, Any> {
         val api = sheets ?: throw IllegalStateException(
             "Google Sheets API not initialized. Check credentials file."
@@ -123,6 +127,38 @@ class GoogleSheetsService(
             log.info("[GSheets] updated {} rows", totalUpdated)
         }
 
+        // Step 4b: Write delivery date and expected quantity columns (planned supplies)
+        val openSupplies: Map<String, PlannedSupplyService.OpenSupplyInfo> =
+            if (deliveryDateColumn != null && expectedColumn != null)
+                plannedSupplyService.findSkusWithOpenSupplies()
+            else emptyMap()
+
+        if (deliveryDateColumn != null && expectedColumn != null && skuToRow.isNotEmpty()) {
+            val supplyUpdates = mutableListOf<ValueRange>()
+            for ((sku, rowNum) in skuToRow) {
+                val info = openSupplies[sku]
+                val dateValue = info?.expectedDate?.toString() ?: ""
+                val expectedValue: Any = if (info != null) info.totalQuantity else ""
+                supplyUpdates.add(
+                    ValueRange().setRange("$sheetName!${deliveryDateColumn}$rowNum").setValues(listOf(listOf(dateValue)))
+                )
+                supplyUpdates.add(
+                    ValueRange().setRange("$sheetName!${expectedColumn}$rowNum").setValues(listOf(listOf(expectedValue)))
+                )
+            }
+            if (supplyUpdates.isNotEmpty()) {
+                val batchSize = 1000
+                for (i in supplyUpdates.indices step batchSize) {
+                    val batch = supplyUpdates.subList(i, minOf(i + batchSize, supplyUpdates.size))
+                    api.spreadsheets().values().batchUpdate(
+                        spreadsheetId,
+                        BatchUpdateValuesRequest().setValueInputOption("USER_ENTERED").setData(batch)
+                    ).execute()
+                }
+                log.info("[GSheets] wrote delivery date/expected qty for {} SKUs", skuToRow.size)
+            }
+        }
+
         // Step 5: Append missing products within their category blocks
         var appended = 0
         if (missing.isNotEmpty()) {
@@ -147,13 +183,13 @@ class GoogleSheetsService(
                         insertIntoBlock(
                             api, spreadsheetId, sheetName, sheetId, prods, productFieldMap, block,
                             skuColumn, colorCodeColumn, colorNameColumn, categoryColumn,
-                            swatchColumn, hexColumn, quantityColumn
+                            swatchColumn, hexColumn, quantityColumn, deliveryDateColumn, expectedColumn, openSupplies
                         )
                     } else {
                         appendAtEnd(
                             api, spreadsheetId, sheetName, sheetId, prods, productFieldMap,
                             skuColumn, colorCodeColumn, colorNameColumn, categoryColumn,
-                            swatchColumn, hexColumn, quantityColumn
+                            swatchColumn, hexColumn, quantityColumn, deliveryDateColumn, expectedColumn, openSupplies
                         )
                     }
                 }
@@ -268,7 +304,9 @@ class GoogleSheetsService(
         products: List<Product>, fieldMap: Map<Long, Map<String, String>>,
         mergeRange: Pair<Int, Int>,
         skuCol: String, codeCol: String, nameCol: String, catCol: String,
-        swatchCol: String, hexCol: String, qtyCol: String
+        swatchCol: String, hexCol: String, qtyCol: String,
+        deliveryDateCol: String? = null, expectedCol: String? = null,
+        openSupplies: Map<String, PlannedSupplyService.OpenSupplyInfo> = emptyMap()
     ): Int {
         val n = products.size
         val (mergeStart0, mergeEnd0) = mergeRange
@@ -351,7 +389,7 @@ class GoogleSheetsService(
         // Write cell values — one ValueRange per column to avoid overwriting formula columns (G, H, etc.)
         val valueData = products.flatMapIndexed { i, product ->
             buildRowValueRanges(sheetName, product, insertAt0 + i + 1, fieldMap,
-                skuCol, codeCol, nameCol, hexCol, qtyCol)
+                skuCol, codeCol, nameCol, hexCol, qtyCol, deliveryDateCol, expectedCol, openSupplies)
         }
         if (valueData.isNotEmpty()) {
             api.spreadsheets().values().batchUpdate(
@@ -370,7 +408,9 @@ class GoogleSheetsService(
         api: Sheets, spreadsheetId: String, sheetName: String, sheetId: Int,
         products: List<Product>, fieldMap: Map<Long, Map<String, String>>,
         skuCol: String, codeCol: String, nameCol: String, catCol: String,
-        swatchCol: String, hexCol: String, qtyCol: String
+        swatchCol: String, hexCol: String, qtyCol: String,
+        deliveryDateCol: String? = null, expectedCol: String? = null,
+        openSupplies: Map<String, PlannedSupplyService.OpenSupplyInfo> = emptyMap()
     ): Int {
         val skuColIdx = colLetterToIndex(skuCol)
         val codeColIdx = colLetterToIndex(codeCol)
@@ -379,7 +419,10 @@ class GoogleSheetsService(
         val swatchColIdx = colLetterToIndex(swatchCol)
         val hexColIdx = colLetterToIndex(hexCol)
         val qtyColIdx = colLetterToIndex(qtyCol)
-        val maxIdx = listOf(skuColIdx, codeColIdx, nameColIdx, catColIdx, swatchColIdx, hexColIdx, qtyColIdx).max()
+        val deliveryDateColIdx = deliveryDateCol?.let { colLetterToIndex(it) }
+        val expectedColIdx = expectedCol?.let { colLetterToIndex(it) }
+        val allIdxs = listOfNotNull(skuColIdx, codeColIdx, nameColIdx, catColIdx, swatchColIdx, hexColIdx, qtyColIdx, deliveryDateColIdx, expectedColIdx)
+        val maxIdx = allIdxs.max()
 
         // Group by category so the first product in each category gets the category text
         val seenCategories = mutableSetOf<String>()
@@ -399,6 +442,11 @@ class GoogleSheetsService(
             row[nameColIdx] = colorName
             row[hexColIdx] = hex
             row[qtyColIdx] = product.quantity
+            if (deliveryDateColIdx != null && expectedColIdx != null) {
+                val info = openSupplies[product.sku.trim()]
+                row[deliveryDateColIdx] = info?.expectedDate?.toString() ?: ""
+                row[expectedColIdx] = if (info != null) info.totalQuantity else ""
+            }
             row.toList()
         }
 
@@ -440,20 +488,31 @@ class GoogleSheetsService(
         sheetName: String, product: Product, row1Based: Int,
         fieldMap: Map<Long, Map<String, String>>,
         skuCol: String, codeCol: String, nameCol: String,
-        hexCol: String, qtyCol: String
+        hexCol: String, qtyCol: String,
+        deliveryDateCol: String? = null, expectedCol: String? = null,
+        openSupplies: Map<String, PlannedSupplyService.OpenSupplyInfo> = emptyMap()
     ): List<ValueRange> {
         val fields = fieldMap[product.id!!] ?: emptyMap()
         val fullCode = fields[FIELD_COLOR_CODE] ?: ""
         val hex = fields[FIELD_HEX] ?: ""
         val colorName = parseColorName(product.name)
 
-        return listOf(
+        val ranges = mutableListOf(
             ValueRange().setRange("$sheetName!$skuCol$row1Based").setValues(listOf(listOf(product.sku))),
             ValueRange().setRange("$sheetName!$codeCol$row1Based").setValues(listOf(listOf(fullCode))),
             ValueRange().setRange("$sheetName!$nameCol$row1Based").setValues(listOf(listOf(colorName))),
             ValueRange().setRange("$sheetName!$hexCol$row1Based").setValues(listOf(listOf(hex))),
             ValueRange().setRange("$sheetName!$qtyCol$row1Based").setValues(listOf(listOf(product.quantity)))
         )
+        if (deliveryDateCol != null && expectedCol != null) {
+            val info = openSupplies[product.sku.trim()]
+            val dateValue = info?.expectedDate?.toString() ?: ""
+            val expectedValue: Any = if (info != null) info.totalQuantity else ""
+            ranges.add(ValueRange().setRange("$sheetName!$deliveryDateCol$row1Based").setValues(listOf(listOf(dateValue))))
+            ranges.add(ValueRange().setRange("$sheetName!$expectedCol$row1Based").setValues(listOf(listOf(expectedValue))))
+        }
+
+        return ranges
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────

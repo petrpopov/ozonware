@@ -17,8 +17,11 @@ data class PlannedSupply(
     @Column(length = 255)
     var supplier: String? = null,
 
-    @Column(name = "planned_date")
-    var plannedDate: LocalDate? = null,
+    @Column(name = "purchase_date")
+    var purchaseDate: LocalDate? = null,
+
+    @Column(name = "expected_date")
+    var expectedDate: LocalDate? = null,
 
     @Column(columnDefinition = "TEXT")
     var note: String? = null,
