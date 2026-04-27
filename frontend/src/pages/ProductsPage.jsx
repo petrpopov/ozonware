@@ -42,6 +42,15 @@ function isHexColor(value) {
   return /^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})$/.test(value.trim());
 }
 
+function categoryClass(value) {
+  const v = String(value || '').toLowerCase();
+  if (v.includes('petg')) return 'cat petg';
+  if (v.includes('basic')) return 'cat basic';
+  if (v.includes('matte')) return 'cat matte';
+  if (v.includes('lite')) return 'cat lite';
+  return 'cat';
+}
+
 function getNowStamp() {
   const now = new Date();
   const pad = (n) => String(n).padStart(2, '0');
@@ -208,8 +217,22 @@ export default function ProductsPage() {
   const productsStats = {
     totalSkus: Number(productsQuery.data?.totalAll ?? productsQuery.data?.total ?? 0),
     inStockSkus: Number(productsQuery.data?.inStockSkus || 0),
-    inStockUnits: Number(productsQuery.data?.totalUnits || 0)
+    inStockUnits: Number(productsQuery.data?.totalUnits || 0),
+    lowStock: Number(productsQuery.data?.lowStockSkus || 0),
+    zeroStock: Number(productsQuery.data?.zeroStockSkus
+      ?? ((productsQuery.data?.totalAll ?? productsQuery.data?.total ?? 0) - Number(productsQuery.data?.inStockSkus || 0))),
   };
+
+  const categoryCounts = useMemo(() => {
+    const result = {};
+    const list = productsQuery.data?.items || [];
+    for (const it of list) {
+      const cf = (it.custom_fields || []).find((f) => String(f.name).toLowerCase().includes('категор') || String(f.name).toLowerCase() === 'category');
+      if (!cf?.value) continue;
+      result[cf.value] = (result[cf.value] || 0) + 1;
+    }
+    return result;
+  }, [productsQuery.data]);
 
   const toggleSort = (key) => {
     setPage(1);
@@ -223,8 +246,9 @@ export default function ProductsPage() {
 
   const renderSortMark = (key) => {
     if (sort.key !== key) return '↕';
-    return sort.dir === 'asc' ? '↑' : '↓';
+    return sort.dir === 'asc' ? '▲' : '▼';
   };
+  const sortThClass = (key) => 'sortable' + (sort.key === key ? ' sorted' : '');
 
   const buildExportData = async () => {
     const allProducts = await services.getProducts(search);
@@ -598,6 +622,19 @@ export default function ProductsPage() {
 
   return (
     <section>
+      <div className="page-head">
+        <div className="page-title-cluster">
+          <h1 className="page-title">Товары</h1>
+          <div className="page-subtitle">Управление каталогом и остатками</div>
+        </div>
+        <div className="kpi-strip">
+          <div className="kpi"><div className="kpi-label">Артикулов</div><div className="kpi-value">{productsStats.totalSkus}</div></div>
+          <div className="kpi"><div className="kpi-label">В наличии</div><div className="kpi-value">{productsStats.inStockSkus}</div></div>
+          <div className="kpi"><div className="kpi-label">Ед. на складе</div><div className="kpi-value">{productsStats.inStockUnits}</div></div>
+          <div className={'kpi' + (productsStats.lowStock > 0 ? ' warn' : '')}><div className="kpi-label">Low stock</div><div className="kpi-value">{productsStats.lowStock}</div></div>
+          <div className={'kpi' + (productsStats.zeroStock > 0 ? ' crit' : '')}><div className="kpi-label">Закончились</div><div className="kpi-value">{productsStats.zeroStock}</div></div>
+        </div>
+      </div>
       <div className="toolbar">
         <button className="btn btn-primary" onClick={openCreate}>+ Добавить</button>
         <div className="toolbar__sep" />
@@ -630,24 +667,159 @@ export default function ProductsPage() {
         />
       </div>
 
-      <div className="products-info">
-        <label className="check stock-check">
-          <input
-            type="checkbox"
-            checked={showZeroStock}
-            onChange={(e) => {
-              const next = e.target.checked;
-              localStorage.setItem('products:showZeroStock', String(next));
-              setShowZeroStock(next);
-            }}
-          />
+      <div className="chipbar">
+        <span className="chipbar-label">Категория</span>
+        {Object.keys(categoryCounts).length === 0 && (
+          <span style={{ color: 'var(--fg-dim)', fontSize: 12 }}>—</span>
+        )}
+        {Object.entries(categoryCounts).map(([name, count]) => (
+          <div key={name} className={'chip ' + categoryClass(name)} style={{ cursor: 'default' }}>
+            <span>{name}</span>
+            <span className="chip-count">{count}</span>
+          </div>
+        ))}
+        <div className="chip-sep" />
+        <span className="chipbar-label">Пресеты</span>
+        <div className="chip preset-chip" title="Пресет (скоро)">
+          <span>Низкий остаток</span>
+        </div>
+        <div className="chip preset-chip" title="Пресет (скоро)">
+          <span>Нет в наличии</span>
+        </div>
+        <div className="chip preset-chip" title="Пресет (скоро)">
+          <span>+ Сохранить вид</span>
+        </div>
+        <div style={{ flex: 1 }} />
+        <label
+          className="cb-label"
+          onClick={() => {
+            const next = !showZeroStock;
+            localStorage.setItem('products:showZeroStock', String(next));
+            setShowZeroStock(next);
+          }}
+        >
+          <span className={'cb' + (showZeroStock ? ' checked' : '')} />
           Показывать товары с нулевым остатком
         </label>
-        <div className="products-stats">
-          <span className="stat-pill"><span className="stat-label">Артикулов</span><span className="stat-value">{productsStats.totalSkus}</span></span>
-          <span className="stat-pill"><span className="stat-label">В наличии</span><span className="stat-value">{productsStats.inStockSkus}</span></span>
-          <span className="stat-pill"><span className="stat-label">Ед. на складе</span><span className="stat-value">{productsStats.inStockUnits}</span></span>
-        </div>
+      </div>
+
+      <div className="table-wrap">
+        <table className="table table-compact">
+          <thead>
+            <tr>
+              <th className={sortThClass('id')} onClick={() => toggleSort('id')}>ID <span>{renderSortMark('id')}</span></th>
+              <th>Фото</th>
+              <th className={sortThClass('name')} onClick={() => toggleSort('name')}>Название <span>{renderSortMark('name')}</span></th>
+              <th className={sortThClass('sku')} onClick={() => toggleSort('sku')}>SKU <span>{renderSortMark('sku')}</span></th>
+              {fieldNames.map((name) => (
+                <th
+                  key={name}
+                  className={sortThClass(`custom:${name}`)}
+                  onClick={() => toggleSort(`custom:${name}`)}
+                >
+                  {name} <span>{renderSortMark(`custom:${name}`)}</span>
+                </th>
+              ))}
+              <th className={sortThClass('quantity')} onClick={() => toggleSort('quantity')}>Остаток <span>{renderSortMark('quantity')}</span></th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pagedProducts.map((product) => {
+              const fieldMap = new Map((product.custom_fields || []).map((f) => [f.name, f.value]));
+              const ozonPhoto = String(fieldMap.get(FIELD_NAME_OZON_PHOTO) || '');
+              return (
+                <tr key={product.id}>
+                  <td>
+                    <button
+                      type="button"
+                      className="id-link-btn"
+                      onClick={() => navigate(`/products/${product.id}`)}
+                      aria-label={`Открыть карточку товара #${product.id}`}
+                    >
+                      {product.id}
+                    </button>
+                  </td>
+                  <td>
+                    {ozonPhoto ? (
+                      <img className="product-mini-image" src={ozonPhoto} alt={product.name} loading="lazy" />
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td>
+                    <span className="cell-ellipsis cell-name" title={product.name}>{product.name}</span>
+                  </td>
+                  <td>
+                    <span className="cell-ellipsis" title={product.sku}>{product.sku}</span>
+                  </td>
+                  {fieldNames.map((name) => {
+                    const value = fieldMap.get(name) || '—';
+                    const lower = name.toLowerCase();
+                    const isHexColumn = lower === 'hex' || lower.includes('hex');
+                    const isCategoryColumn = lower.includes('категор') || lower === 'category';
+                    const showSwatch = isHexColumn && isHexColor(value);
+                    const catClass = isCategoryColumn ? categoryClass(value) : '';
+
+                    return (
+                      <td key={name}>
+                        {isCategoryColumn && value !== '—' ? (
+                          <span className={catClass}>{value}</span>
+                        ) : (
+                          <span className="cell-ellipsis hex-cell" title={value}>
+                            {showSwatch && <span className="hex-swatch" style={{ backgroundColor: value }} />}
+                            {value}
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
+                  <td>
+                    <div className="stock-cell">
+                      <span className={'stock-dot ' + (product.quantity === 0 ? 'crit' : 'ok')} />
+                      <span className={'stock-num' + (product.quantity === 0 ? ' crit' : '')}>
+                        {product.quantity}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="row-actions">
+                    <button
+                      className="icon-btn"
+                      onClick={() => openEdit(product)}
+                      aria-label="Изменить"
+                      title="Изменить"
+                    >
+                      <EditIcon />
+                    </button>
+                    <button
+                      className="icon-btn danger"
+                      onClick={() => setDeleteCandidate(product)}
+                      aria-label="Удалить"
+                      title="Удалить"
+                    >
+                      <TrashIcon />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+            {pagedProducts.length === 0 && (
+              <tr>
+                <td colSpan={fieldNames.length + 6} style={{ padding: 0, border: 'none' }}>
+                  <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+                    <p style={{ margin: '0 0 6px', fontWeight: 500, color: 'var(--text)' }}>Товары не найдены</p>
+                    <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--text-muted)' }}>
+                      Попробуйте изменить фильтр или добавьте новый товар
+                    </p>
+                    <button className="btn" type="button" onClick={openCreate}>
+                      Добавить товар
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
 
       <div className="toolbar history-pager">
@@ -693,109 +865,6 @@ export default function ProductsPage() {
             </button>
           </>
         )}
-      </div>
-
-      <div className="table-wrap">
-        <table className="table table-compact">
-          <thead>
-            <tr>
-              <th className="sortable" onClick={() => toggleSort('id')}>ID <span>{renderSortMark('id')}</span></th>
-              <th>Фото</th>
-              <th className="sortable" onClick={() => toggleSort('name')}>Название <span>{renderSortMark('name')}</span></th>
-              <th className="sortable" onClick={() => toggleSort('sku')}>SKU <span>{renderSortMark('sku')}</span></th>
-              {fieldNames.map((name) => (
-                <th
-                  key={name}
-                  className="sortable"
-                  onClick={() => toggleSort(`custom:${name}`)}
-                >
-                  {name} <span>{renderSortMark(`custom:${name}`)}</span>
-                </th>
-              ))}
-              <th className="sortable" onClick={() => toggleSort('quantity')}>Остаток <span>{renderSortMark('quantity')}</span></th>
-              <th>Действия</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pagedProducts.map((product) => {
-              const fieldMap = new Map((product.custom_fields || []).map((f) => [f.name, f.value]));
-              const ozonPhoto = String(fieldMap.get(FIELD_NAME_OZON_PHOTO) || '');
-              return (
-                <tr key={product.id}>
-                  <td>
-                    <button
-                      type="button"
-                      className="id-link-btn"
-                      onClick={() => navigate(`/products/${product.id}`)}
-                      aria-label={`Открыть карточку товара #${product.id}`}
-                    >
-                      {product.id}
-                    </button>
-                  </td>
-                  <td>
-                    {ozonPhoto ? (
-                      <img className="product-mini-image" src={ozonPhoto} alt={product.name} loading="lazy" />
-                    ) : (
-                      '—'
-                    )}
-                  </td>
-                  <td>
-                    <span className="cell-ellipsis cell-name" title={product.name}>{product.name}</span>
-                  </td>
-                  <td>
-                    <span className="cell-ellipsis" title={product.sku}>{product.sku}</span>
-                  </td>
-                  {fieldNames.map((name) => {
-                    const value = fieldMap.get(name) || '—';
-                    const isHexColumn = name.toLowerCase() === 'hex' || name.toLowerCase().includes('hex');
-                    const showSwatch = isHexColumn && isHexColor(value);
-
-                    return (
-                      <td key={name}>
-                        <span className="cell-ellipsis hex-cell" title={value}>
-                          {showSwatch && <span className="hex-swatch" style={{ backgroundColor: value }} />}
-                          {value}
-                        </span>
-                      </td>
-                    );
-                  })}
-                  <td>{product.quantity}</td>
-                  <td className="row-actions">
-                    <button
-                      className="btn btn-icon"
-                      onClick={() => openEdit(product)}
-                      aria-label="Изменить"
-                    >
-                      <EditIcon />
-                    </button>
-                    <button
-                      className="btn btn-danger btn-icon"
-                      onClick={() => setDeleteCandidate(product)}
-                      aria-label="Удалить"
-                    >
-                      <TrashIcon />
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-            {pagedProducts.length === 0 && (
-              <tr>
-                <td colSpan={fieldNames.length + 6} style={{ padding: 0, border: 'none' }}>
-                  <div style={{ padding: '32px 16px', textAlign: 'center' }}>
-                    <p style={{ margin: '0 0 6px', fontWeight: 500, color: 'var(--text)' }}>Товары не найдены</p>
-                    <p style={{ margin: '0 0 16px', fontSize: '13px', color: 'var(--text-muted)' }}>
-                      Попробуйте изменить фильтр или добавьте новый товар
-                    </p>
-                    <button className="btn" type="button" onClick={openCreate}>
-                      Добавить товар
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </div>
 
       <Modal

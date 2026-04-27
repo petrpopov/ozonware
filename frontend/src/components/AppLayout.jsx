@@ -1,23 +1,34 @@
 import { useEffect, useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { MoonIcon, SunIcon } from './Icons.jsx';
+import {
+  MoonIcon,
+  SunIcon,
+  BoxIcon,
+  InboxIcon,
+  TruckIcon,
+  OutboxIcon,
+  MinusIcon,
+  ClipboardIcon,
+  ChartIcon,
+  GearIcon,
+  BellIcon,
+  HelpIcon,
+} from './Icons.jsx';
 
-const tabs = [
-  ['products', 'Товары'],
-  ['receipt', 'Приход'],
-  ['planned-supplies', 'Поставки'],
-  ['shipment', 'Отгрузка'],
-  ['writeoff', 'Списания'],
-  ['inventory', 'Инвентаризация'],
-  ['reports', 'Отчеты'],
-  ['settings', 'Настройки']
+const NAV = [
+  { slug: 'products', label: 'Товары', Icon: BoxIcon },
+  { slug: 'receipt', label: 'Приход', Icon: InboxIcon },
+  { slug: 'planned-supplies', label: 'Поставки', Icon: TruckIcon },
+  { slug: 'shipment', label: 'Отгрузка', Icon: OutboxIcon },
+  { slug: 'writeoff', label: 'Списания', Icon: MinusIcon },
+  { slug: 'inventory', label: 'Инвентаризация', Icon: ClipboardIcon },
+  { slug: 'reports', label: 'Отчёты', Icon: ChartIcon },
+  { slug: 'settings', label: 'Настройки', Icon: GearIcon },
 ];
 
 function getInitialTheme() {
   const saved = localStorage.getItem('theme');
-  if (saved === 'light' || saved === 'dark') {
-    return saved;
-  }
+  if (saved === 'light' || saved === 'dark') return saved;
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
@@ -29,41 +40,62 @@ export default function AppLayout() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
+  const toggleTheme = () => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
 
   return (
-    <>
+    <div className="app-shell">
       <header className="app-header">
-        <div className="app-header-brand">Складской учёт</div>
+        <div className="app-header-brand">
+          <div className="brand-dot">oz</div>
+          <div>ozonware</div>
+        </div>
+        <div className="topbar-crumbs">
+          <span>Складской учёт</span>
+        </div>
+        <div className="topbar-actions">
+          <button type="button" className="icon-btn" title="Помощь" aria-label="Помощь">
+            <HelpIcon size={16} />
+          </button>
+          <button type="button" className="icon-btn bell-btn" title="Уведомления" aria-label="Уведомления">
+            <BellIcon size={16} />
+            <span className="bell-dot" />
+          </button>
+          <button
+            type="button"
+            className="icon-btn app-theme-btn"
+            onClick={toggleTheme}
+            title="Переключить тему"
+            aria-label="Переключить тему"
+          >
+            {theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}
+          </button>
+          <div className="avatar" title="Аккаунт">АК</div>
+        </div>
+      </header>
+
+      <aside className="app-sidebar">
+        <div className="sidebar-label">Склад</div>
         <nav className="app-nav" aria-label="Разделы">
-          {tabs.map(([slug, label]) => (
+          {NAV.map(({ slug, label, Icon }) => (
             <NavLink
               key={slug}
               to={`/${slug}`}
               className={({ isActive }) => (isActive ? 'app-nav-item active' : 'app-nav-item')}
             >
-              {label}
+              <span className="app-nav-icon"><Icon size={16} /></span>
+              <span>{label}</span>
             </NavLink>
           ))}
         </nav>
-        <button
-          type="button"
-          className="app-theme-btn"
-          onClick={toggleTheme}
-          aria-label="Переключить тему"
-          title="Переключить тему"
-        >
-          {theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}
-        </button>
-      </header>
+      </aside>
 
-      <div className="page">
-        <main className="content">
-          <Outlet />
-        </main>
-      </div>
-    </>
+      <main className="app-main">
+        <div className="page">
+          <div className="content">
+            <Outlet />
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }

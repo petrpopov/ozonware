@@ -251,7 +251,7 @@ export default function OperationsHistory({
                 <td className="row-actions">
                   {onEdit && (!canEditOperation || canEditOperation(op)) && (
                     <button
-                      className="btn btn-icon"
+                      className="icon-btn"
                       onClick={(event) => {
                         event.stopPropagation();
                         onEdit(op);
@@ -263,7 +263,7 @@ export default function OperationsHistory({
                     </button>
                   )}
                   <button
-                    className="btn btn-danger btn-icon"
+                    className="icon-btn danger"
                     onClick={(event) => {
                       event.stopPropagation();
                       onDelete(op.id);

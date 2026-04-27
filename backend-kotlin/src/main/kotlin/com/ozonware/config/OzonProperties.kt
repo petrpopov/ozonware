@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component
 @ConfigurationProperties(prefix = "ozon")
 data class OzonProperties(
     var requestPauseMs: Long = 1500,
+    var fbsMaxPeriodDays: Long = 30,
     var apiUrl: String = "https://api-seller.ozon.ru/v3/posting/fbs/list",
     var fboListUrl: String = "https://api-seller.ozon.ru/v3/supply-order/list",
     var fboGetUrl: String = "https://api-seller.ozon.ru/v3/supply-order/get",

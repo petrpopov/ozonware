@@ -360,10 +360,13 @@ export default function PlannedSupplyDetailPage() {
 
   return (
     <div className="stack">
-      {/* Header */}
-      <div className="toolbar">
-        <button className="btn" onClick={() => navigate('/planned-supplies')}>← К поставкам</button>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div className="page-head">
+        <button className="btn btn-ghost" onClick={() => navigate('/planned-supplies')} style={{ marginRight: 8 }}>← К поставкам</button>
+        <div className="page-title-cluster">
+          <h1 className="page-title">{supply.title || 'Поставка'}</h1>
+          <div className="page-subtitle">Детализация поставки #{supply.id}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
           {!datesEditOpen && (
             <button className="btn" onClick={() => {
               setEditPurchaseDate(supply.purchase_date || '');

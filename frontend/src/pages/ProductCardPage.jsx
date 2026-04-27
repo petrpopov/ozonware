@@ -181,17 +181,19 @@ export default function ProductCardPage() {
 
   return (
     <div className="stack">
-      <nav className="breadcrumbs" aria-label="Навигация">
+      <div className="page-head">
+        <button className="btn btn-ghost" type="button" onClick={() => navigate('/products')} style={{ marginRight: 8 }}>← К товарам</button>
+        <div className="page-title-cluster">
+          <h1 className="page-title">{form.name || `Товар #${form.id}`}</h1>
+          <div className="page-subtitle">Карточка товара · операций: {operationsCount}</div>
+        </div>
+      </div>
+
+      <nav className="breadcrumbs" aria-label="Навигация" style={{ padding: '0 4px' }}>
         <button type="button" className="breadcrumbs-link" onClick={() => navigate('/products')}>Товары</button>
         <span className="breadcrumbs-sep">/</span>
         <span className="breadcrumbs-current">{form.name || `#${form.id}`}</span>
       </nav>
-
-      <div className="toolbar operation-actions">
-        <button className="btn operation-action-btn" type="button" onClick={() => navigate('/products')}>
-          Назад к товарам
-        </button>
-      </div>
 
       <section className="card">
         <h3>Карточка товара #{form.id}</h3>

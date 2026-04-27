@@ -133,6 +133,12 @@ export default function ReportsPage() {
 
   return (
     <div className="stack">
+      <div className="page-head">
+        <div className="page-title-cluster">
+          <h1 className="page-title">Отчёты</h1>
+          <div className="page-subtitle">Импорт заказов Ozon и журнал операций</div>
+        </div>
+      </div>
       <section className="card">
         <h3>Импорт заказов Ozon (CSV)</h3>
         <div className="form-row two-cols">

@@ -106,6 +106,12 @@ class OzonService(
         return Triple(moscow.year, moscow.monthValue, moscow.dayOfMonth)
     }
 
+    private fun mskRangeToUtc(startMsk: LocalDate, endMsk: LocalDate): Pair<String, String> {
+        val sinceInstant = startMsk.atStartOfDay(moscowZone).toInstant()
+        val toInstant = endMsk.atStartOfDay(moscowZone).plusDays(1).minusNanos(1_000_000).toInstant()
+        return sinceInstant.toString() to toInstant.toString()
+    }
+
     // ── Rate limiting ──
 
     private fun awaitRateLimit() {
@@ -163,65 +169,71 @@ class OzonService(
                 ?: throw BadRequestException("OZON API Key not configured")
 
             val syncStartDateStr = settings["syncStartDate"]?.asText()
-            val syncBaseDate = syncStartDateStr?.takeIf { it.isNotBlank() }?.let {
-                try { LocalDate.parse(it).atStartOfDay() } catch (_: Exception) { LocalDate.now(ZoneOffset.UTC).minusYears(1).atStartOfDay() }
-            } ?: LocalDate.now(ZoneOffset.UTC).minusYears(1).atStartOfDay()
+            val syncBaseDate: LocalDate = syncStartDateStr?.takeIf { it.isNotBlank() }?.let {
+                try { LocalDate.parse(it) } catch (_: Exception) { LocalDate.now(moscowZone).minusYears(1) }
+            } ?: LocalDate.now(moscowZone).minusYears(1)
 
-            val syncDate = syncBaseDate.atZone(ZoneId.of("UTC"))
-            val sinceParts = getMoscowYmdParts(syncDate)
-            val sinceUTC = LocalDateTime.of(sinceParts.first, sinceParts.second, sinceParts.third, 21, 0)
-                .atZone(ZoneId.of("UTC")).toInstant().toString()
+            val windowEnd = LocalDate.now(moscowZone)
 
-            val now = ZonedDateTime.now(ZoneId.of("UTC"))
-            val toParts = getMoscowYmdParts(now)
-            val toUTCString = LocalDateTime.of(toParts.first, toParts.second, toParts.third, 20, 59, 59, 999_000_000)
-                .atZone(ZoneId.of("UTC")).toInstant().toString()
+            val windows = mutableListOf<Pair<LocalDate, LocalDate>>()
+            var ws = syncBaseDate
+            while (!ws.isAfter(windowEnd)) {
+                val we = minOf(ws.plusDays(ozonProperties.fbsMaxPeriodDays - 1), windowEnd)
+                windows.add(ws to we)
+                ws = we.plusDays(1)
+            }
 
-            sendFbsProgress("loading", "Начало загрузки с ${sinceParts.first}-${String.format("%02d", sinceParts.second)}-${String.format("%02d", sinceParts.third)} до конца текущего дня (МСК)...")
+            sendFbsProgress("loading", "Начало загрузки с $syncBaseDate до $windowEnd (${windows.size} окн${if (windows.size in 2..4) "а" else if (windows.size == 1) "о" else ""})...")
 
             val allPostings = mutableListOf<JsonNode>()
-            var offset = 0
-            val limit = 1000
-            var hasNext = true
-            var pageNum = 0
 
-            while (hasNext) {
+            for ((windowStart, windowFinish) in windows) {
                 if (fbsCancelRequested.get()) throw CanceledException("FBS sync canceled by user")
-                pageNum++
 
-                val requestBody = mapOf(
-                    "dir" to "DESC",
-                    "filter" to mapOf("since" to sinceUTC, "to" to toUTCString),
-                    "limit" to limit,
-                    "offset" to offset,
-                    "with" to mapOf(
-                        "analytics_data" to true,
-                        "barcodes" to false,
-                        "financial_data" to false,
-                        "translit" to false
+                val (sinceUTC, toUTCString) = mskRangeToUtc(windowStart, windowFinish)
+                val limit = 1000
+                var offset = 0
+                var hasNext = true
+                var pageNum = 0
+
+                while (hasNext) {
+                    if (fbsCancelRequested.get()) throw CanceledException("FBS sync canceled by user")
+                    pageNum++
+
+                    val requestBody = mapOf(
+                        "dir" to "DESC",
+                        "filter" to mapOf("since" to sinceUTC, "to" to toUTCString),
+                        "limit" to limit,
+                        "offset" to offset,
+                        "with" to mapOf(
+                            "analytics_data" to true,
+                            "barcodes" to false,
+                            "financial_data" to false,
+                            "translit" to false
+                        )
                     )
-                )
 
-                sendFbsProgress("loading", "Загрузка страницы $pageNum (offset: $offset)...")
+                    sendFbsProgress("loading", "Окно $windowStart…$windowFinish, страница $pageNum (offset: $offset)...")
 
-                val data = makeRequestByUrl(
-                    ozonProperties.apiUrl, clientId, apiKey, requestBody, fbsCancelRequested
-                )
-                val postings = data["result"]?.get("postings") ?: objectMapper.createArrayNode()
+                    val data = makeRequestByUrl(
+                        ozonProperties.apiUrl, clientId, apiKey, requestBody, fbsCancelRequested
+                    )
+                    val postings = data["result"]?.get("postings") ?: objectMapper.createArrayNode()
 
-                sendFbsProgress("loading", "Получено ${postings.size()} заказов (всего: ${allPostings.size + postings.size()})")
+                    sendFbsProgress("loading", "Получено ${postings.size()} заказов (всего: ${allPostings.size + postings.size()})")
 
-                for (i in 0 until postings.size()) {
-                    allPostings.add(postings[i])
-                }
+                    for (i in 0 until postings.size()) {
+                        allPostings.add(postings[i])
+                    }
 
-                hasNext = data["result"]?.get("has_next")?.asBoolean() ?: false
-                if (postings.size() == 0) hasNext = false
-                offset += postings.size()
-                if (postings.size() < limit) hasNext = false
+                    hasNext = data["result"]?.get("has_next")?.asBoolean() ?: false
+                    if (postings.size() == 0) hasNext = false
+                    offset += postings.size()
+                    if (postings.size() < limit) hasNext = false
 
-                if (hasNext) {
-                    Thread.sleep(300)
+                    if (hasNext) {
+                        Thread.sleep(300)
+                    }
                 }
             }
 
