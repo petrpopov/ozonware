@@ -7,6 +7,23 @@ import Modal from '../components/Modal.jsx';
 import { parseSupplyXlsx } from '../utils/xlsxParser.js';
 import { EditIcon, TrashIcon } from '../components/Icons.jsx';
 
+function categoryClass(value) {
+  const v = String(value || '').toLowerCase();
+  if (v.includes('petg')) return 'cat petg';
+  if (v.includes('basic')) return 'cat basic';
+  if (v.includes('matte')) return 'cat matte';
+  if (v.includes('lite')) return 'cat lite';
+  return 'cat';
+}
+
+function getCategoryValue(product) {
+  if (!product?.custom_fields) return null;
+  const cf = product.custom_fields.find(
+    (f) => String(f.name).toLowerCase().includes('категор') || String(f.name).toLowerCase() === 'category'
+  );
+  return cf?.value || null;
+}
+
 const STATUS_LABELS = {
   planned: 'Запланирован',
   partial: 'Частично',
@@ -78,6 +95,11 @@ export default function PlannedSuppliesPage() {
 
   const rsqlFilter = statusKey === 'all' ? null : `status==${statusKey}`;
   const sortStr = `${sort.key},${sort.dir}`;
+
+  const productsQuery = useQuery({
+    queryKey: ['products'],
+    queryFn: () => services.getProducts(),
+  });
 
   const suppliesQuery = useQuery({
     queryKey: ['planned-supplies', rsqlFilter, sortStr, page, pageSize],
@@ -178,7 +200,14 @@ export default function PlannedSuppliesPage() {
     if (!file) return;
     const result = await parseSupplyXlsx(file, { pushToast });
     if (!result) return;
-    setExcelItems(result.items);
+    const productsMap = new Map(
+      (productsQuery.data || []).map((p) => [p.sku.trim().toLowerCase(), p])
+    );
+    const enriched = result.items.map((it) => {
+      const product = productsMap.get(it.sku.trim().toLowerCase()) || null;
+      return { ...it, product, found: Boolean(product) };
+    });
+    setExcelItems(enriched);
     setExcelFileName(result.fileName);
     const baseName = result.fileName.replace(/\.[^/.]+$/, '');
     setExcelTitle(baseName);
@@ -192,7 +221,7 @@ export default function PlannedSuppliesPage() {
       return;
     }
     const finalItems = isExcel
-      ? excelItems.map((item) => ({ sku: item.sku, product_name: null, planned_quantity: item.qty }))
+      ? excelItems.map((item) => ({ sku: item.sku, product_name: item.product?.name ?? null, planned_quantity: item.qty }))
       : items
           .filter((item) => item.sku.trim())
           .map((item) => ({
@@ -507,19 +536,22 @@ export default function PlannedSuppliesPage() {
         ) : (
           <div className="stack">
             <div>
-              <label style={{ display: 'block', marginBottom: '4px', fontSize: '13px', color: 'var(--color-muted)' }}>
+              <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: 'var(--color-muted)' }}>
                 Файл Excel
               </label>
-              <input
-                type="file"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleExcelFile}
-                style={{ display: 'block' }}
-              />
+              <label className="btn import-file-btn">
+                Выберите файл
+                <input
+                  className="hidden-input"
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleExcelFile}
+                />
+              </label>
               {excelFileName && (
-                <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--color-muted)' }}>
+                <div className="import-file-name">
                   {excelFileName} — {excelItems.length} позиций
-                </p>
+                </div>
               )}
             </div>
 
@@ -597,16 +629,29 @@ export default function PlannedSuppliesPage() {
                       <thead>
                         <tr>
                           <th>SKU</th>
+                          <th>Наименование</th>
+                          <th>Категория</th>
                           <th style={{ fontFamily: 'var(--font-mono)', textAlign: 'right' }}>Количество</th>
+                          <th>Статус</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {excelItems.map((item, idx) => (
-                          <tr key={idx}>
-                            <td style={{ fontFamily: 'var(--font-mono)' }}>{item.sku}</td>
-                            <td style={{ fontFamily: 'var(--font-mono)', textAlign: 'right' }}>{item.qty}</td>
-                          </tr>
-                        ))}
+                        {excelItems.map((entry, idx) => {
+                          const cat = getCategoryValue(entry.product);
+                          return (
+                            <tr key={idx} className={entry.found ? '' : 'match-warning'}>
+                              <td style={{ fontFamily: 'var(--font-mono)' }}>{entry.sku}</td>
+                              <td>{entry.product?.name || '—'}</td>
+                              <td>{cat ? <span className={categoryClass(cat)}>{cat}</span> : '—'}</td>
+                              <td style={{ fontFamily: 'var(--font-mono)', textAlign: 'right' }}>{entry.qty}</td>
+                              <td>
+                                <span className={`match-pill ${entry.found ? 'match-pill-found' : 'match-pill-warning'}`}>
+                                  {entry.found ? 'Найден' : 'Не найден'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
