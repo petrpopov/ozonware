@@ -328,9 +328,15 @@ export default function InventoryPage() {
 
   return (
     <div className="stack">
+      <div className="page-head">
+        <div className="page-title-cluster">
+          <h1 className="page-title">Инвентаризация</h1>
+          <div className="page-subtitle">Сверка и пересчёт остатков на складе</div>
+        </div>
+      </div>
       <div className="toolbar operation-actions">
-        <button className="btn operation-action-btn" type="button" onClick={startInventory}>
-          Начать
+        <button className="btn btn-primary operation-action-btn" type="button" onClick={startInventory}>
+          + Начать
         </button>
       </div>
 
@@ -630,7 +636,7 @@ export default function InventoryPage() {
                               </td>
                               <td className="row-actions">
                                 <button
-                                  className="btn btn-danger btn-icon"
+                                  className="icon-btn danger"
                                   type="button"
                                   aria-label="Удалить"
                                   title="Удалить"
@@ -659,7 +665,7 @@ export default function InventoryPage() {
                               <div className="row-actions">
                                 <span className="import-subtitle">{box.items.length} поз. · {units} шт.</span>
                                 <button
-                                  className="btn btn-danger btn-icon"
+                                  className="icon-btn danger"
                                   type="button"
                                   aria-label="Удалить короб"
                                   title="Удалить короб"

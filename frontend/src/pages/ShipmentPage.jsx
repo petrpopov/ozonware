@@ -744,14 +744,20 @@ export default function ShipmentPage() {
 
   return (
     <div className="stack">
+      <div className="page-head">
+        <div className="page-title-cluster">
+          <h1 className="page-title">Отгрузка</h1>
+          <div className="page-subtitle">Отгрузки и синхронизация с OZON (FBS / FBO)</div>
+        </div>
+      </div>
       <div className="toolbar operation-actions">
-        <button className="btn operation-action-btn" type="button" onClick={() => setAddOpen(true)}>
-          Добавить
+        <button className="btn btn-primary operation-action-btn" type="button" onClick={() => setAddOpen(true)}>
+          + Добавить
         </button>
-        <button className="btn btn-primary operation-action-btn" type="button" onClick={openFbsSyncModal}>
+        <button className="btn operation-action-btn" type="button" onClick={openFbsSyncModal}>
           Синхронизация FBS
         </button>
-        <button className="btn btn-primary operation-action-btn" type="button" onClick={openFboSyncModal}>
+        <button className="btn operation-action-btn" type="button" onClick={openFboSyncModal}>
           Синхронизация FBO
         </button>
       </div>

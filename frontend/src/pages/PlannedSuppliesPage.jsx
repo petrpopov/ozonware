@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { services } from '../api/services.js';
@@ -21,10 +21,24 @@ const STATUS_COLORS = {
   closed: 'var(--text-muted)',
 };
 
+const PILL_VARIANT = {
+  planned: 'planned',
+  partial: 'partial',
+  matched: 'closed',
+  closed: 'closed',
+  shipped: 'shipped',
+  returned: 'returned',
+};
+
 function statusBadge(status) {
   const label = STATUS_LABELS[status] || status;
-  const color = STATUS_COLORS[status] || 'var(--color-muted)';
-  return <span className="badge" style={{ color }}>{label}</span>;
+  const variant = PILL_VARIANT[status] || '';
+  return (
+    <span className={'pill' + (variant ? ` ${variant}` : '')}>
+      {variant && <span className="pill-dot" />}
+      {label}
+    </span>
+  );
 }
 
 function emptyItem() {
@@ -40,6 +54,7 @@ export default function PlannedSuppliesPage() {
   const [createMode, setCreateMode] = useState('manual');
 
   const [statusKey, setStatusKey] = useState('all');
+  const [search, setSearch] = useState('');
   const [sort, setSort] = useState({ key: 'purchaseDate', dir: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
@@ -74,7 +89,15 @@ export default function PlannedSuppliesPage() {
     }),
   });
 
-  const supplies = suppliesQuery.data?.items || [];
+  const rawSupplies = suppliesQuery.data?.items || [];
+  const supplies = useMemo(() => {
+    if (!search.trim()) return rawSupplies;
+    const q = search.trim().toLowerCase();
+    return rawSupplies.filter((s) =>
+      String(s.title || '').toLowerCase().includes(q) ||
+      String(s.supplier || '').toLowerCase().includes(q)
+    );
+  }, [rawSupplies, search]);
   const total = Number(suppliesQuery.data?.total || 0);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
@@ -86,9 +109,10 @@ export default function PlannedSuppliesPage() {
     );
   };
 
+  const sortThClass = (key) => 'sortable' + (sort.key === key ? ' sorted' : '');
   const renderSortMark = (key) => {
     if (sort.key !== key) return '↕';
-    return sort.dir === 'asc' ? '↑' : '↓';
+    return sort.dir === 'asc' ? '▲' : '▼';
   };
 
   const createMutation = useMutation({
@@ -194,25 +218,55 @@ export default function PlannedSuppliesPage() {
 
   const filterLabels = { all: 'Все', planned: STATUS_LABELS.planned, partial: STATUS_LABELS.partial, matched: STATUS_LABELS.matched, closed: STATUS_LABELS.closed };
 
+  const statusCounts = useMemo(() => {
+    const all = suppliesQuery.data?.items || [];
+    const by = (k) => all.filter((x) => x.status === k).length;
+    return {
+      all: all.length,
+      planned: by('planned'),
+      partial: by('partial'),
+      matched: by('matched'),
+      closed: by('closed'),
+    };
+  }, [suppliesQuery.data]);
+
   return (
     <div className="stack">
-      <div className="toolbar">
-        <h2 style={{ margin: 0 }}>Запланированные поставки</h2>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button className="btn" onClick={() => openCreate('excel')}>Из Excel</button>
-          <button className="btn btn-primary" onClick={() => openCreate('manual')}>Создать</button>
+      <div className="page-head">
+        <div className="page-title-cluster">
+          <h1 className="page-title">Запланированные поставки</h1>
+          <div className="page-subtitle">Заказы у поставщиков и их состыковка с приходами</div>
+        </div>
+        <div className="kpi-strip">
+          <div className="kpi"><div className="kpi-label">Всего</div><div className="kpi-value">{statusCounts.all}</div></div>
+          <div className={'kpi' + (statusCounts.planned ? ' warn' : '')}><div className="kpi-label">Ожидается</div><div className="kpi-value">{statusCounts.planned + statusCounts.partial}</div></div>
+          <div className="kpi"><div className="kpi-label">Закрыто</div><div className="kpi-value">{statusCounts.closed}</div></div>
         </div>
       </div>
 
-      <div className="toolbar" style={{ gap: '4px' }}>
+      <div className="toolbar">
+        <button className="btn btn-primary" onClick={() => openCreate('manual')}>+ Создать</button>
+        <button className="btn" onClick={() => openCreate('excel')}>Из Excel</button>
+        <input
+          className="input"
+          placeholder="Поиск по названию, поставщику…"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+          style={{ maxWidth: 320, marginLeft: 8 }}
+        />
+      </div>
+
+      <div className="chipbar">
+        <span className="chipbar-label">Статус</span>
         {['all', 'planned', 'partial', 'matched', 'closed'].map((s) => (
-          <button
+          <div
             key={s}
-            className={`btn${statusKey === s ? ' btn-primary' : ''}`}
-            onClick={(e) => { e.currentTarget.blur(); setStatusKey(s); setPage(1); }}
+            className={'chip' + (statusKey === s ? ' active' : '')}
+            onClick={() => { setStatusKey(s); setPage(1); }}
           >
-            {filterLabels[s]}
-          </button>
+            <span>{filterLabels[s]}</span>
+            <span className="chip-count">{statusCounts[s]}</span>
+          </div>
         ))}
       </div>
 
@@ -245,11 +299,11 @@ export default function PlannedSuppliesPage() {
           <table className="table">
             <thead>
               <tr>
-                <th className="sortable" onClick={() => toggleSort('title')}>Название <span>{renderSortMark('title')}</span></th>
-                <th className="sortable" onClick={() => toggleSort('supplier')}>Поставщик <span>{renderSortMark('supplier')}</span></th>
-                <th className="sortable" onClick={() => toggleSort('purchaseDate')}>Закупка <span>{renderSortMark('purchaseDate')}</span></th>
-                <th className="sortable" onClick={() => toggleSort('expectedDate')}>Ожидается <span>{renderSortMark('expectedDate')}</span></th>
-                <th className="sortable" onClick={() => toggleSort('status')}>Статус <span>{renderSortMark('status')}</span></th>
+                <th className={sortThClass('title')} onClick={() => toggleSort('title')}>Название <span>{renderSortMark('title')}</span></th>
+                <th className={sortThClass('supplier')} onClick={() => toggleSort('supplier')}>Поставщик <span>{renderSortMark('supplier')}</span></th>
+                <th className={sortThClass('purchaseDate')} onClick={() => toggleSort('purchaseDate')}>Закупка <span>{renderSortMark('purchaseDate')}</span></th>
+                <th className={sortThClass('expectedDate')} onClick={() => toggleSort('expectedDate')}>Ожидается <span>{renderSortMark('expectedDate')}</span></th>
+                <th className={sortThClass('status')} onClick={() => toggleSort('status')}>Статус <span>{renderSortMark('status')}</span></th>
                 <th>Позиций</th>
                 <th>Приёмок</th>
                 <th></th>
@@ -277,17 +331,19 @@ export default function PlannedSuppliesPage() {
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.item_count ?? 0}</td>
                   <td style={{ fontFamily: 'var(--font-mono)' }}>{supply.receipt_count ?? 0}</td>
                   <td onClick={(e) => e.stopPropagation()}>
-                    <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                    <div className="row-actions">
                       <button
-                        className="btn btn-icon"
+                        className="icon-btn"
                         aria-label="Редактировать"
+                        title="Редактировать"
                         onClick={() => navigate(`/planned-supplies/${supply.id}`)}
                       >
                         <EditIcon />
                       </button>
                       <button
-                        className="btn btn-danger btn-icon"
+                        className="icon-btn danger"
                         aria-label="Удалить"
+                        title="Удалить"
                         disabled={deleteMutation.isPending}
                         onClick={() => { if (window.confirm('Удалить план?')) deleteMutation.mutate(supply.id); }}
                       >

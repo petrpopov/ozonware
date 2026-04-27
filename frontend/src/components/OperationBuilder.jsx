@@ -316,7 +316,7 @@ export default function OperationBuilder({
                   )}
                   <td>
                     <button
-                      className="btn btn-danger btn-icon"
+                      className="icon-btn danger"
                       type="button"
                       onClick={() => removeItem(item.productId)}
                       aria-label="Удалить"

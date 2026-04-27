@@ -325,18 +325,24 @@ export default function WriteoffPage() {
 
   return (
     <div className="stack">
+      <div className="page-head">
+        <div className="page-title-cluster">
+          <h1 className="page-title">Списания</h1>
+          <div className="page-subtitle">Списания и корректировки остатков</div>
+        </div>
+        <div className="kpi-strip">
+          <div className="kpi"><div className="kpi-label">Списаний</div><div className="kpi-value">{writeoffTotals.operations}</div></div>
+          <div className="kpi"><div className="kpi-label">Позиций</div><div className="kpi-value">{writeoffTotals.positions}</div></div>
+          <div className="kpi"><div className="kpi-label">Списано шт.</div><div className="kpi-value">{writeoffTotals.quantity}</div></div>
+        </div>
+      </div>
       <div className="toolbar operation-actions">
-        <button className="btn operation-action-btn" type="button" onClick={() => setAddOpen(true)}>
-          Добавить списание
+        <button className="btn btn-primary operation-action-btn" type="button" onClick={() => setAddOpen(true)}>
+          + Добавить списание
         </button>
         <button className="btn operation-action-btn" type="button" onClick={openCreateCorrection}>
           Добавить корректировку
         </button>
-      </div>
-
-      <div className="import-result">
-        Списаний: <strong>{writeoffTotals.operations}</strong> · Позиций: <strong>{writeoffTotals.positions}</strong> ·
-        Списано шт: <strong>{writeoffTotals.quantity}</strong>
       </div>
       <div className="toolbar history-pager">
         <label className="history-pager-label">
@@ -571,7 +577,7 @@ export default function WriteoffPage() {
                           </td>
                           <td>
                             <button
-                              className="btn btn-danger btn-icon"
+                              className="icon-btn danger"
                               type="button"
                               onClick={() => removeCorrectionItem(row.productId)}
                               aria-label="Удалить"

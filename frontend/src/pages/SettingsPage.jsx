@@ -278,14 +278,21 @@ export default function SettingsPage() {
 
   return (
     <div className="settings-page">
-      <div className="settings-tabs" role="tablist">
+      <div className="page-head">
+        <div className="page-title-cluster">
+          <h1 className="page-title">Настройки</h1>
+          <div className="page-subtitle">Конфигурация складского учёта</div>
+        </div>
+      </div>
+      <div className="tabs" role="tablist">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             role="tab"
             aria-selected={activeTab === tab.id}
-            className={activeTab === tab.id ? 'settings-tab active' : 'settings-tab'}
+            className={activeTab === tab.id ? 'tab active' : 'tab'}
+            style={{ background: 'transparent', border: 'none' }}
             onClick={() => setActiveTab(tab.id)}
           >
             {tab.label}
@@ -347,7 +354,7 @@ export default function SettingsPage() {
                 </label>
                 <button
                   type="button"
-                  className="btn btn-danger btn-icon"
+                  className="icon-btn danger"
                   aria-label="Удалить поле"
                   title="Удалить поле"
                   onClick={() => setFields((prev) => prev.filter((_, idx) => idx !== index))}

@@ -451,11 +451,17 @@ export default function ReceiptPage() {
 
   return (
     <div className="stack">
+      <div className="page-head">
+        <div className="page-title-cluster">
+          <h1 className="page-title">Приход</h1>
+          <div className="page-subtitle">История оприходования товаров</div>
+        </div>
+      </div>
       <div className="toolbar operation-actions">
-        <button className="btn operation-action-btn" type="button" onClick={() => setAddOpen(true)}>
-          Добавить
+        <button className="btn btn-primary operation-action-btn" type="button" onClick={() => setAddOpen(true)}>
+          + Добавить
         </button>
-        <button className="btn btn-primary operation-action-btn" type="button" onClick={openImportModal}>
+        <button className="btn operation-action-btn" type="button" onClick={openImportModal}>
           Импорт из Excel
         </button>
       </div>

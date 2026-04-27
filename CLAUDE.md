@@ -45,10 +45,11 @@ For detailed information, read the relevant `.memory_bank/` file:
 Три слова: **точный, спокойный, профессиональный**. Рабочий инструмент, а не витрина.
 
 ### Aesthetic Direction
-- Vercel / Geist — ахроматика, shadow-as-border, минимализм
-- **Тёмная тема — основная** (оптимизирована под длительную работу)
-- Geist + Geist Mono (числа, артикулы, коды)
-- Статусные цвета (зелёный/красный/янтарный) — только через CSS-переменные
+- Vercel / Geist — минимализм, data-dense, shadow-as-border
+- Палитра: graphite-blue surfaces + cyan primary, токены в OKLCH
+- **Тёмная тема — основная** (оптимизирована под длительную работу); светлая — симметричная адаптация тех же классов/токенов
+- Geist (UI) + JetBrains Mono (числа, артикулы, коды, даты) — tabular-nums
+- Статусные цвета (зелёный/красный/янтарный/cyan) — только через CSS-переменные
 - Запрещено: glassmorphism, gradient text, hero metrics, card grids, border-left accent stripes
 
 ### Design Principles

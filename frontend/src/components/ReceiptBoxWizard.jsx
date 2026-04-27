@@ -464,7 +464,7 @@ export default function ReceiptBoxWizard({ products, globalBoxSize, onSubmit, lo
                       <div className="row-actions">
                         <span className="import-subtitle" style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{box.product.sku} · {box.count} шт.</span>
                         <button
-                          className="btn btn-danger btn-icon"
+                          className="icon-btn danger"
                           type="button"
                           aria-label="Удалить короб"
                           onClick={() => removeBox(box.boxNumber)}
