@@ -2023,6 +2023,15 @@ td.row-actions {
   color: var(--danger);
 }
 
+.match-warning {
+  background: color-mix(in oklch, var(--color-warning) 10%, transparent);
+}
+
+.match-pill-warning {
+  box-shadow: 0px 0px 0px 1px color-mix(in oklch, var(--color-warning) 30%, transparent);
+  color: var(--color-warning);
+}
+
 .ozon-days-list {
   margin-top: 8px;
   display: grid;
