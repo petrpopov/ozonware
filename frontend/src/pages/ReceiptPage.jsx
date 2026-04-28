@@ -129,7 +129,7 @@ export default function ReceiptPage() {
     resetImportState();
   };
 
-  const productsQuery = useQuery({ queryKey: ['products', 'receipt'], queryFn: () => services.getProducts('') });
+  const productsQuery = useQuery({ queryKey: ['products', 'receipt', 'all'], queryFn: () => services.getProducts('', { includeInactive: true }) });
   const boxSizeQuery = useQuery({
     queryKey: ['app-setting', 'receipt_default_box_size'],
     queryFn: () => services.getAppSetting('receipt_default_box_size'),
@@ -370,11 +370,14 @@ export default function ReceiptPage() {
     const entries = Array.from(grouped.values())
       .map((item) => {
         const product = productsMap.get(normalizeText(item.sku)) || null;
-        return { ...item, product, found: Boolean(product) };
+        const found = Boolean(product);
+        const activating = found && !product.is_active;
+        return { ...item, product, found, activating };
       })
       .sort((left, right) => String(left.sku).localeCompare(String(right.sku), 'ru', { sensitivity: 'base' }));
 
     const foundEntries = entries.filter((item) => item.found);
+    const activatingEntries = entries.filter((item) => item.activating);
     const totalQtyInFile = entries.reduce((sum, item) => sum + item.quantity, 0);
     const totalQtyFound = foundEntries.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -385,6 +388,7 @@ export default function ReceiptPage() {
         rowsInFile: importRows.length,
         uniqueSku: entries.length,
         foundSku: foundEntries.length,
+        activatingSku: activatingEntries.length,
         notFoundSku: entries.length - foundEntries.length,
         totalQtyInFile,
         totalQtyFound,
@@ -591,7 +595,7 @@ export default function ReceiptPage() {
         }
       >
         <p className="import-subtitle">
-              SKU берется из колонки <strong>SKU</strong>. Не найденные в БД товары не добавляются.
+              SKU берется из колонки <strong>SKU</strong>. Товары из справочника будут автоматически активированы при проведении прихода.
             </p>
 
             <div className="form-row two-cols">
@@ -674,14 +678,14 @@ export default function ReceiptPage() {
             {importPreview.entries.length > 0 && (
               <div className="stack-sm">
                 <div className="import-result">
-                  Строк в файле: <strong>{importPreview.totals.rowsInFile}</strong> · SKU в файле:{' '}
-                  <strong>{importPreview.totals.uniqueSku}</strong> · Найдено в БД:{' '}
-                  <strong>{importPreview.totals.foundSku}</strong> · Не найдено:{' '}
-                  <strong>{importPreview.totals.notFoundSku}</strong> · Кол-во в файле:{' '}
-                  <strong>{importPreview.totals.totalQtyInFile}</strong> · Кол-во к приходу:{' '}
-                  <strong>{importPreview.totals.totalQtyFound}</strong> · Пропущено (пустой SKU):{' '}
-                  <strong>{importPreview.totals.skippedEmptySku}</strong> · Пропущено (невалидное количество):{' '}
-                  <strong>{importPreview.totals.skippedInvalidQty}</strong>
+                  Строк в файле: <strong>{importPreview.totals.rowsInFile}</strong> · SKU:{' '}
+                  <strong>{importPreview.totals.uniqueSku}</strong> · Найдено:{' '}
+                  <strong>{importPreview.totals.foundSku}</strong>
+                  {importPreview.totals.activatingSku > 0 && (
+                    <> · <span style={{ color: 'var(--accent)' }}>Из справочника (будет активировано): <strong>{importPreview.totals.activatingSku}</strong></span></>
+                  )} · Не найдено:{' '}
+                  <strong>{importPreview.totals.notFoundSku}</strong> · К приходу:{' '}
+                  <strong>{importPreview.totals.totalQtyFound}</strong>
                 </div>
                 <div className="table-wrap import-preview-table">
                   <table className="table compact table-compact">
@@ -695,14 +699,14 @@ export default function ReceiptPage() {
                     </thead>
                     <tbody>
                       {importPreview.entries.map((entry) => (
-                        <tr key={entry.sku} className={entry.found ? 'match-found' : 'match-missing'}>
+                        <tr key={entry.sku} className={!entry.found ? 'match-missing' : entry.activating ? 'match-catalog' : 'match-found'}>
                           <td>{entry.sku}</td>
                           <td>{entry.quantity}</td>
                           <td>{entry.product ? entry.product.name : '—'}</td>
                           <td>
-                            <span className={`match-pill ${entry.found ? 'match-pill-found' : 'match-pill-missing'}`}>
-                              {entry.found ? 'Найден' : 'Не найден'}
-                            </span>
+                            {!entry.found && <span className="match-pill match-pill-missing">Не найден</span>}
+                            {entry.found && !entry.activating && <span className="match-pill match-pill-found">Найден</span>}
+                            {entry.found && entry.activating && <span className="match-pill match-pill-catalog">Из справочника</span>}
                           </td>
                         </tr>
                       ))}

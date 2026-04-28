@@ -34,7 +34,7 @@ class ProductFieldsService(
         val legacyNameToKind = mapOf(
             "OZON" to SystemFieldKind.OZON_SKU,
             "Артикул OZON" to SystemFieldKind.OZON_ARTICLE,
-            "Фото OZON" to SystemFieldKind.OZON_PHOTO
+            "Фото" to SystemFieldKind.OZON_PHOTO
         )
         for ((name, fieldKind) in legacyNameToKind) {
             val field = productFieldRepository.findByName(name) ?: continue

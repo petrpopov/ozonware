@@ -154,6 +154,13 @@ const PATHS = {
   x: <path d="M18 6 6 18M6 6l12 12" />,
   check: <path d="M20 6 9 17l-5-5" />,
   bookmark: <path d="M19 21 12 16l-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />,
+  library: (
+    <>
+      <path d="M4 19V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v13" />
+      <path d="M2 19h20" />
+      <path d="M9 10h6M9 14h6" />
+    </>
+  ),
 };
 
 export function Icon({ name, size = 16, className = 'ic' }) {
@@ -190,3 +197,4 @@ export function BellIcon({ size = 16 }) { return <Icon name="bell" size={size} /
 export function HelpIcon({ size = 16 }) { return <Icon name="help" size={size} />; }
 export function XIcon({ size = 16 }) { return <Icon name="x" size={size} />; }
 export function CheckIcon({ size = 16 }) { return <Icon name="check" size={size} />; }
+export function LibraryIcon({ size = 16 }) { return <Icon name="library" size={size} />; }

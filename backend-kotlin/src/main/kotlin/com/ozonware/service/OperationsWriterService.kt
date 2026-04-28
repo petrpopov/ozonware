@@ -188,6 +188,14 @@ class OperationsWriterService(
             }
         }
 
+        if (cmd.typeCode == "receipt") {
+            val inactiveIds = cmd.items.map { it.productId }
+                .let { ids ->
+                    productRepository.findAllById(ids).filter { !it.isActive }.mapNotNull { it.id }
+                }
+            if (inactiveIds.isNotEmpty()) productRepository.activateAll(inactiveIds)
+        }
+
         if (cmd.plannedSupplyId != null) {
             plannedSupplyService.recalcStatus(cmd.plannedSupplyId!!)
         } else if (cmd.parentOperationId != null) {

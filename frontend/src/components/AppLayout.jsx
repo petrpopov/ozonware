@@ -13,10 +13,12 @@ import {
   GearIcon,
   BellIcon,
   HelpIcon,
+  LibraryIcon,
 } from './Icons.jsx';
 
 const NAV = [
   { slug: 'products', label: 'Товары', Icon: BoxIcon },
+  { slug: 'catalog', label: 'Справочник', Icon: LibraryIcon },
   { slug: 'receipt', label: 'Приход', Icon: InboxIcon },
   { slug: 'planned-supplies', label: 'Поставки', Icon: TruckIcon },
   { slug: 'shipment', label: 'Отгрузка', Icon: OutboxIcon },

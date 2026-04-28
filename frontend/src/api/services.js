@@ -1,7 +1,13 @@
 import { api } from './http.js';
 
 export const services = {
-  getProducts: (search = '') => api.get(`/products${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  getProducts: (search = '', { includeInactive = false } = {}) => {
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (includeInactive) params.set('includeInactive', 'true');
+    const qs = params.toString();
+    return api.get(`/products${qs ? `?${qs}` : ''}`);
+  },
   getProductById: (id) => api.get(`/products/${id}`),
   getProductUsage: (id) => api.get(`/products/${id}/usage`),
   createProduct: (payload) => api.post('/products', payload),
@@ -18,12 +24,15 @@ export const services = {
     if (filter) params.set('filter', filter);
     return api.get(`/operations?${params}`);
   },
-  getProductsPage: ({ search = '', page = 0, size = 20, sort = 'id,desc', hideZeroStock = false } = {}) => {
+  getProductsPage: ({ search = '', page = 0, size = 20, sort = 'id,desc', hideZeroStock = false, includeInactive = false } = {}) => {
     const params = new URLSearchParams({ page: String(page), size: String(size), sort });
     if (search) params.set('search', search);
     if (hideZeroStock) params.set('hideZeroStock', 'true');
+    if (includeInactive) params.set('includeInactive', 'true');
     return api.get(`/products?${params}`);
   },
+
+  importProductsCatalog: (items) => api.post('/products/catalog/import', { items }),
 
   getOperationById: (id) => api.get(`/operations/${id}`),
   createOperation: (payload) => api.post('/operations', payload),

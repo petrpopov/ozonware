@@ -19,6 +19,7 @@ export default function App() {
         <Route path="/" element={<Navigate to="/products" replace />} />
         <Route element={<AppLayout />}>
           <Route path="/products" element={<ProductsPage />} />
+          <Route path="/catalog" element={<ProductsPage catalogMode />} />
           <Route path="/products/:id" element={<ProductCardPage />} />
           <Route path="/receipt" element={<ReceiptPage />} />
           <Route path="/planned-supplies" element={<PlannedSuppliesPage />} />

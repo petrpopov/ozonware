@@ -38,7 +38,7 @@ class OzonFboSyncTest : OzonMockApiBase() {
 
         productFieldsService.ensureSystemField("OZON",         "ozon_sku",     "text")
         productFieldsService.ensureSystemField("Артикул OZON", "ozon_article", "text")
-        productFieldsService.ensureSystemField("Фото OZON",    "ozon_photo",   "image")
+        productFieldsService.ensureSystemField("Фото",    "ozon_photo",   "image")
 
         settingsService.saveSetting(
             "ozon_settings",

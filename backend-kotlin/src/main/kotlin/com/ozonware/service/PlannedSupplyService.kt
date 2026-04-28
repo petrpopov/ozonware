@@ -55,6 +55,7 @@ class PlannedSupplyService(
             )
         )
         val items = saveItems(supply.id!!, req.items)
+        activateCatalogProducts(items.mapNotNull { it.productId })
 
         return buildResponse(supply, items)
     }
@@ -187,6 +188,7 @@ class PlannedSupplyService(
 
         plannedSupplyItemRepository.deleteAllByPlannedSupplyId(id)
         val items = saveItems(id, req.items)
+        activateCatalogProducts(items.mapNotNull { it.productId })
 
         return buildResponse(supply, items)
     }
@@ -342,6 +344,14 @@ class PlannedSupplyService(
                 )
             }
         )
+    }
+
+    private fun activateCatalogProducts(productIds: Collection<Long>) {
+        if (productIds.isEmpty()) return
+        val inactiveIds = productRepository.findAllById(productIds)
+            .filter { !it.isActive }
+            .mapNotNull { it.id }
+        if (inactiveIds.isNotEmpty()) productRepository.activateAll(inactiveIds)
     }
 
     private fun saveItems(

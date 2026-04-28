@@ -16,7 +16,8 @@ const emptyForm = {
   sku: '',
   quantity: 0,
   description: '',
-  custom_fields: []
+  custom_fields: [],
+  is_active: true
 };
 
 function normalizeCustomFields(product, fields) {
@@ -115,7 +116,7 @@ async function loadXlsx() {
   return xlsxModulePromise;
 }
 
-export default function ProductsPage() {
+export default function ProductsPage({ catalogMode = false }) {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [pageLimit, setPageLimit] = useState('20');
@@ -145,13 +146,14 @@ export default function ProductsPage() {
   const serverSort = sort.key in sortKeyMap ? `${sortKeyMap[sort.key]},${sort.dir}` : 'id,desc';
 
   const productsQuery = useQuery({
-    queryKey: ['products', 'page', search, page, pageLimit, serverSort, showZeroStock],
+    queryKey: ['products', catalogMode ? 'catalog' : 'page', search, page, pageLimit, serverSort, showZeroStock],
     queryFn: () => services.getProductsPage({
       search,
       page: page - 1,
       size: pageLimit === 'all' ? 9999 : Number(pageLimit),
       sort: serverSort,
-      hideZeroStock: !showZeroStock
+      hideZeroStock: !showZeroStock,
+      includeInactive: catalogMode
     }),
     placeholderData: (previousData) => previousData
   });
@@ -324,6 +326,7 @@ export default function ProductsPage() {
   const openCreate = () => {
     setForm({
       ...emptyForm,
+      is_active: !catalogMode,
       custom_fields: fields.map((field) => ({
         name: field.name,
         value: field.type === 'select' && field.required && field.options?.length ? field.options[0] : '',
@@ -515,7 +518,8 @@ export default function ProductsPage() {
             sku: sku.trim(),
             quantity: 0,
             description: description.trim(),
-            custom_fields: Array.from(customMap.values())
+            custom_fields: Array.from(customMap.values()),
+            is_active: !catalogMode
           });
           existingSku.add(normalizedSku);
           created += 1;
@@ -545,6 +549,7 @@ export default function ProductsPage() {
   const openEdit = (product) => {
     setForm({
       ...product,
+      is_active: !!product.is_active,
       custom_fields: normalizeCustomFields(product, fields)
     });
     setErrors({});
@@ -609,6 +614,9 @@ export default function ProductsPage() {
           required: field.required
         }))
     };
+    if (!form.id || catalogMode) {
+      payload.is_active = !!form.is_active;
+    }
     saveMutation.mutate(payload);
   };
 
@@ -624,16 +632,20 @@ export default function ProductsPage() {
     <section>
       <div className="page-head">
         <div className="page-title-cluster">
-          <h1 className="page-title">Товары</h1>
-          <div className="page-subtitle">Управление каталогом и остатками</div>
+          <h1 className="page-title">{catalogMode ? 'Справочник' : 'Товары'}</h1>
+          <div className="page-subtitle">
+            {catalogMode ? 'Все SKU поставщика, включая неактивные' : 'Управление каталогом и остатками'}
+          </div>
         </div>
-        <div className="kpi-strip">
-          <div className="kpi"><div className="kpi-label">Артикулов</div><div className="kpi-value">{productsStats.totalSkus}</div></div>
-          <div className="kpi"><div className="kpi-label">В наличии</div><div className="kpi-value">{productsStats.inStockSkus}</div></div>
-          <div className="kpi"><div className="kpi-label">Ед. на складе</div><div className="kpi-value">{productsStats.inStockUnits}</div></div>
-          <div className={'kpi' + (productsStats.lowStock > 0 ? ' warn' : '')}><div className="kpi-label">Low stock</div><div className="kpi-value">{productsStats.lowStock}</div></div>
-          <div className={'kpi' + (productsStats.zeroStock > 0 ? ' crit' : '')}><div className="kpi-label">Закончились</div><div className="kpi-value">{productsStats.zeroStock}</div></div>
-        </div>
+        {!catalogMode && (
+          <div className="kpi-strip">
+            <div className="kpi"><div className="kpi-label">Артикулов</div><div className="kpi-value">{productsStats.totalSkus}</div></div>
+            <div className="kpi"><div className="kpi-label">В наличии</div><div className="kpi-value">{productsStats.inStockSkus}</div></div>
+            <div className="kpi"><div className="kpi-label">Ед. на складе</div><div className="kpi-value">{productsStats.inStockUnits}</div></div>
+            <div className={'kpi' + (productsStats.lowStock > 0 ? ' warn' : '')}><div className="kpi-label">Low stock</div><div className="kpi-value">{productsStats.lowStock}</div></div>
+            <div className={'kpi' + (productsStats.zeroStock > 0 ? ' crit' : '')}><div className="kpi-label">Закончились</div><div className="kpi-value">{productsStats.zeroStock}</div></div>
+          </div>
+        )}
       </div>
       <div className="toolbar">
         <button className="btn btn-primary" onClick={openCreate}>+ Добавить</button>
@@ -667,6 +679,7 @@ export default function ProductsPage() {
         />
       </div>
 
+      {!catalogMode && (
       <div className="chipbar">
         <span className="chipbar-label">Категория</span>
         {Object.keys(categoryCounts).length === 0 && (
@@ -702,6 +715,7 @@ export default function ProductsPage() {
           Показывать товары с нулевым остатком
         </label>
       </div>
+      )}
 
       <div className="table-wrap">
         <table className="table table-compact">
@@ -720,7 +734,10 @@ export default function ProductsPage() {
                   {name} <span>{renderSortMark(`custom:${name}`)}</span>
                 </th>
               ))}
-              <th className={sortThClass('quantity')} onClick={() => toggleSort('quantity')}>Остаток <span>{renderSortMark('quantity')}</span></th>
+              {!catalogMode && (
+                <th className={sortThClass('quantity')} onClick={() => toggleSort('quantity')}>Остаток <span>{renderSortMark('quantity')}</span></th>
+              )}
+              {catalogMode && <th>Статус</th>}
               <th>Действия</th>
             </tr>
           </thead>
@@ -729,7 +746,7 @@ export default function ProductsPage() {
               const fieldMap = new Map((product.custom_fields || []).map((f) => [f.name, f.value]));
               const ozonPhoto = String(fieldMap.get(FIELD_NAME_OZON_PHOTO) || '');
               return (
-                <tr key={product.id}>
+                <tr key={product.id} className={catalogMode && !product.is_active ? 'match-catalog' : ''}>
                   <td>
                     <button
                       type="button"
@@ -774,14 +791,24 @@ export default function ProductsPage() {
                       </td>
                     );
                   })}
-                  <td>
-                    <div className="stock-cell">
-                      <span className={'stock-dot ' + (product.quantity === 0 ? 'crit' : 'ok')} />
-                      <span className={'stock-num' + (product.quantity === 0 ? ' crit' : '')}>
-                        {product.quantity}
-                      </span>
-                    </div>
-                  </td>
+                  {!catalogMode && (
+                    <td>
+                      <div className="stock-cell">
+                        <span className={'stock-dot ' + (product.quantity === 0 ? 'crit' : 'ok')} />
+                        <span className={'stock-num' + (product.quantity === 0 ? ' crit' : '')}>
+                          {product.quantity}
+                        </span>
+                      </div>
+                    </td>
+                  )}
+                  {catalogMode && (
+                    <td>
+                      {product.is_active
+                        ? <span className="match-pill match-pill-found">Активный</span>
+                        : <span className="match-pill match-pill-catalog">В справочнике</span>
+                      }
+                    </td>
+                  )}
                   <td className="row-actions">
                     <button
                       className="icon-btn"
@@ -942,6 +969,16 @@ export default function ProductsPage() {
             />
             <span className="field-error field-error-placeholder">&nbsp;</span>
           </label>
+
+          {catalogMode && (
+            <label
+              className="cb-label"
+              onClick={() => setForm((s) => ({ ...s, is_active: !s.is_active }))}
+            >
+              <span className={'cb' + (form.is_active ? ' checked' : '')} />
+              Активный (виден в разделе «Товары»)
+            </label>
+          )}
 
           {fields.map((field, idx) => {
             const value = form.custom_fields?.[idx]?.value ?? '';
