@@ -83,11 +83,11 @@ export const services = {
   deleteDictionaryItem: (name, id) => api.del(`/dictionaries/${name}/${id}`),
 
   getPlannedSupplies: ({ includeClosed = false, page = 0, size = 200 } = {}) => {
-    const params = new URLSearchParams({ page: String(page), size: String(size), sort: 'plannedDate,desc' });
+    const params = new URLSearchParams({ page: String(page), size: String(size), sort: 'purchaseDate,desc' });
     if (!includeClosed) params.set('filter', 'status!=closed');
     return api.get(`/planned-supplies?${params}`);
   },
-  getPlannedSuppliesPage: ({ filter, page = 0, size = 20, sort = 'plannedDate,desc' } = {}) => {
+  getPlannedSuppliesPage: ({ filter, page = 0, size = 20, sort = 'purchaseDate,desc' } = {}) => {
     const params = new URLSearchParams({ page: String(page), size: String(size), sort });
     if (filter) params.set('filter', filter);
     return api.get(`/planned-supplies?${params}`);

@@ -269,10 +269,11 @@ class GoogleSheetsService(
         // 1. Merged multi-row blocks — read category text at the start of each merge
         val mergedRows = mutableSetOf<Int>()
         for ((start0, end0) in merges) {
+            if (start0 < startRow - 1) continue  // skip header rows above data area
             val row1 = start0 + 1
             val value = api.spreadsheets().values().get(spreadsheetId, "$sheetName!${catColLetter}$row1").execute()
                 .getValues()?.getOrNull(0)?.getOrNull(0)?.toString()?.trim() ?: continue
-            if (value.isNotEmpty()) {
+            if (value.isNotEmpty() && value != FIELD_CATEGORY) {
                 result[value] = start0 to end0
                 (start0 until end0).forEach { mergedRows.add(it) }
             }
@@ -285,7 +286,7 @@ class GoogleSheetsService(
 
         colData.forEachIndexed { idx, row ->
             val cat = row.getOrNull(0)?.toString()?.trim() ?: return@forEachIndexed
-            if (cat.isEmpty()) return@forEachIndexed
+            if (cat.isEmpty() || cat == FIELD_CATEGORY) return@forEachIndexed  // skip empty and column header
             val row0 = startRow - 1 + idx  // 0-based
             if (row0 in mergedRows) return@forEachIndexed  // already covered by a merge block
             if (!result.containsKey(cat)) {

@@ -41,6 +41,8 @@ export default function OperationBuilder({
     return String(field?.value || '').trim();
   };
 
+  const defaultQty = type === 'receipt' ? 10 : 1;
+
   const addItem = (product) => {
     setSubmitError('');
     setItems((prev) => {
@@ -57,7 +59,7 @@ export default function OperationBuilder({
           productName: product.name,
           productSKU: product.sku,
           productImage: getProductPhoto(product),
-          quantity: 1,
+          quantity: defaultQty,
           reason: 'defect',
           note: '',
           actualRemaining: Number(product.quantity || 0),

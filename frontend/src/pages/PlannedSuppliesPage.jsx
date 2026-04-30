@@ -624,7 +624,11 @@ export default function PlannedSuppliesPage() {
 
                 <div>
                   <p style={{ margin: '0 0 6px', fontSize: '13px', color: 'var(--color-muted)' }}>
-                    Предпросмотр позиций ({excelItems.length})
+                    Предпросмотр позиций ({excelItems.length}) — всего{' '}
+                    <strong style={{ color: 'var(--text)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                      {excelItems.reduce((sum, it) => sum + (Number(it.qty) || 0), 0)}
+                    </strong>{' '}
+                    шт.
                   </p>
                   <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
                     <table className="table" style={{ fontSize: '13px' }}>

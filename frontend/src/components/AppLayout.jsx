@@ -18,13 +18,13 @@ import {
 
 const NAV = [
   { slug: 'products', label: 'Товары', Icon: BoxIcon },
-  { slug: 'catalog', label: 'Справочник', Icon: LibraryIcon },
-  { slug: 'receipt', label: 'Приход', Icon: InboxIcon },
   { slug: 'planned-supplies', label: 'Поставки', Icon: TruckIcon },
-  { slug: 'shipment', label: 'Отгрузка', Icon: OutboxIcon },
+  { slug: 'receipt', label: 'Приходы', Icon: InboxIcon },
+  { slug: 'shipment', label: 'Отгрузки', Icon: OutboxIcon },
   { slug: 'writeoff', label: 'Списания', Icon: MinusIcon },
   { slug: 'inventory', label: 'Инвентаризация', Icon: ClipboardIcon },
   { slug: 'reports', label: 'Отчёты', Icon: ChartIcon },
+  { slug: 'catalog', label: 'Справочник', Icon: LibraryIcon },
   { slug: 'settings', label: 'Настройки', Icon: GearIcon },
 ];
 

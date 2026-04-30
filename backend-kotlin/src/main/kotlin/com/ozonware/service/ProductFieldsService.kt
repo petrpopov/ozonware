@@ -150,6 +150,11 @@ class ProductFieldsService(
                     ?.id?.let { productFieldValueRepository.deleteById(it) }
                 deleted++
             } else {
+                if (field.type == "select" && value !in field.options) {
+                    field.options = field.options + value
+                    productFieldRepository.save(field)
+                    log.info("[ProductFieldsService] syncFieldValues: auto-added option '{}' to field '{}'", value, name)
+                }
                 productFieldValueRepository.upsertTextValue(productId, fid, value)
                 updated++
             }

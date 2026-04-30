@@ -152,7 +152,7 @@ export default function ProductsPage({ catalogMode = false }) {
       page: page - 1,
       size: pageLimit === 'all' ? 9999 : Number(pageLimit),
       sort: serverSort,
-      hideZeroStock: !showZeroStock,
+      hideZeroStock: !catalogMode && !showZeroStock,
       includeInactive: catalogMode
     }),
     placeholderData: (previousData) => previousData
@@ -284,10 +284,11 @@ export default function ProductsPage({ catalogMode = false }) {
 
   const saveMutation = useMutation({
     mutationFn: async (payload) => {
-      if (payload.id) {
-        return services.updateProduct(payload.id, payload);
+      const { id, ...body } = payload;
+      if (id) {
+        return services.updateProduct(id, body);
       }
-      return services.createProduct(payload);
+      return services.createProduct(body);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -650,17 +651,21 @@ export default function ProductsPage({ catalogMode = false }) {
       <div className="toolbar">
         <button className="btn btn-primary" onClick={openCreate}>+ Добавить</button>
         <div className="toolbar__sep" />
-        <Dropdown
-          label="Импорт"
-          items={[
-            { label: 'Из Excel', onClick: () => setImportOpen(true) },
-            {
-              label: syncOzonProductsMutation.isPending ? 'Синхр...' : 'Синхр. OZON',
-              onClick: () => syncOzonProductsMutation.mutate(),
-              disabled: syncOzonProductsMutation.isPending
-            }
-          ]}
-        />
+        {catalogMode ? (
+          <button className="btn" type="button" onClick={() => setImportOpen(true)}>Импорт</button>
+        ) : (
+          <Dropdown
+            label="Импорт"
+            items={[
+              { label: 'Из Excel', onClick: () => setImportOpen(true) },
+              {
+                label: syncOzonProductsMutation.isPending ? 'Синхр...' : 'Синхр. OZON',
+                onClick: () => syncOzonProductsMutation.mutate(),
+                disabled: syncOzonProductsMutation.isPending
+              }
+            ]}
+          />
+        )}
         <Dropdown
           label="Экспорт"
           items={[
@@ -668,8 +673,6 @@ export default function ProductsPage({ catalogMode = false }) {
             { label: 'CSV', onClick: exportCsv }
           ]}
         />
-        <div className="toolbar__sep" />
-        <button className="btn" onClick={() => productsQuery.refetch()}>⟳ Обновить</button>
         <div className="toolbar__spacer" />
         <input
           className="input"
