@@ -97,8 +97,8 @@ export default function PlannedSuppliesPage() {
   const sortStr = `${sort.key},${sort.dir}`;
 
   const productsQuery = useQuery({
-    queryKey: ['products'],
-    queryFn: () => services.getProducts(),
+    queryKey: ['products', 'all'],
+    queryFn: () => services.getProducts('', { includeInactive: true }),
   });
 
   const suppliesQuery = useQuery({
@@ -205,7 +205,9 @@ export default function PlannedSuppliesPage() {
     );
     const enriched = result.items.map((it) => {
       const product = productsMap.get(it.sku.trim().toLowerCase()) || null;
-      return { ...it, product, found: Boolean(product) };
+      const found = Boolean(product);
+      const activating = found && !product.is_active;
+      return { ...it, product, found, activating };
     });
     setExcelItems(enriched);
     setExcelFileName(result.fileName);
@@ -622,7 +624,11 @@ export default function PlannedSuppliesPage() {
 
                 <div>
                   <p style={{ margin: '0 0 6px', fontSize: '13px', color: 'var(--color-muted)' }}>
-                    Предпросмотр позиций ({excelItems.length})
+                    Предпросмотр позиций ({excelItems.length}) — всего{' '}
+                    <strong style={{ color: 'var(--text)', fontFamily: 'var(--font-mono)', fontWeight: 600 }}>
+                      {excelItems.reduce((sum, it) => sum + (Number(it.qty) || 0), 0)}
+                    </strong>{' '}
+                    шт.
                   </p>
                   <div style={{ maxHeight: '220px', overflowY: 'auto' }}>
                     <table className="table" style={{ fontSize: '13px' }}>
@@ -639,15 +645,15 @@ export default function PlannedSuppliesPage() {
                         {excelItems.map((entry, idx) => {
                           const cat = getCategoryValue(entry.product);
                           return (
-                            <tr key={idx} className={entry.found ? '' : 'match-warning'}>
+                            <tr key={idx} className={!entry.found ? 'match-warning' : entry.activating ? 'match-catalog' : ''}>
                               <td style={{ fontFamily: 'var(--font-mono)' }}>{entry.sku}</td>
                               <td>{entry.product?.name || '—'}</td>
                               <td>{cat ? <span className={categoryClass(cat)}>{cat}</span> : '—'}</td>
                               <td style={{ fontFamily: 'var(--font-mono)', textAlign: 'right' }}>{entry.qty}</td>
                               <td>
-                                <span className={`match-pill ${entry.found ? 'match-pill-found' : 'match-pill-warning'}`}>
-                                  {entry.found ? 'Найден' : 'Не найден'}
-                                </span>
+                                {!entry.found && <span className="match-pill match-pill-warning">Не найден</span>}
+                                {entry.found && !entry.activating && <span className="match-pill match-pill-found">Найден</span>}
+                                {entry.found && entry.activating && <span className="match-pill match-pill-catalog">Из справочника</span>}
                               </td>
                             </tr>
                           );

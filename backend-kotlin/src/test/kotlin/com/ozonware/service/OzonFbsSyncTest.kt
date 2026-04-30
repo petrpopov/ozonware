@@ -39,7 +39,7 @@ class OzonFbsSyncTest : OzonMockApiBase() {
         // Ensure OZON field definitions exist (idempotent)
         productFieldsService.ensureSystemField("OZON",         "ozon_sku",     "text")
         productFieldsService.ensureSystemField("Артикул OZON", "ozon_article", "text")
-        productFieldsService.ensureSystemField("Фото OZON",    "ozon_photo",   "image")
+        productFieldsService.ensureSystemField("Фото",    "ozon_photo",   "image")
 
         // Save OZON credentials — required by getOzonSettings()
         settingsService.saveSetting(

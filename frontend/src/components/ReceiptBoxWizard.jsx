@@ -132,6 +132,11 @@ export default function ReceiptBoxWizard({ products, globalBoxSize, onSubmit, lo
     setBoxes((prev) => prev.filter((b) => b.boxNumber !== boxNumber));
   };
 
+  const updateBoxCount = (boxNumber, value) => {
+    const count = Math.max(1, Number(value) || 1);
+    setBoxes((prev) => prev.map((b) => b.boxNumber === boxNumber ? { ...b, count } : b));
+  };
+
   // --- сканер ---
 
   const processScannerSubmit = () => {
@@ -213,17 +218,22 @@ export default function ReceiptBoxWizard({ products, globalBoxSize, onSubmit, lo
 
   // --- выбор запланированной поставки ---
 
-  const selectPlan = (plan) => {
-    const bySku = {};
-    (plan.items || []).forEach((item) => {
-      if (item.sku && item.planned_quantity > 0) {
-        bySku[item.sku] = (bySku[item.sku] || 0) + item.planned_quantity;
-      }
-    });
-    setOrderBySku(bySku);
-    setOrderFileName(plan.title);
+  const selectPlan = async (plan) => {
     setSelectedPlanId(plan.id);
     setSelectedPlanTitle(plan.title);
+    setOrderFileName(plan.title);
+    try {
+      const full = await services.getPlannedSupplyById(plan.id);
+      const bySku = {};
+      (full.items || []).forEach((item) => {
+        if (item.sku && item.planned_quantity > 0) {
+          bySku[item.sku] = (bySku[item.sku] || 0) + item.planned_quantity;
+        }
+      });
+      setOrderBySku(bySku);
+    } catch {
+      pushToast('Не удалось загрузить позиции поставки', 'error');
+    }
   };
 
   // --- загрузка xlsx заказа поставщика ---
@@ -462,7 +472,19 @@ export default function ReceiptBoxWizard({ products, globalBoxSize, onSubmit, lo
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
                       <strong style={{ whiteSpace: 'nowrap' }}>Короб #{box.boxNumber}</strong>
                       <div className="row-actions">
-                        <span className="import-subtitle" style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap' }}>{box.product.sku} · {box.count} шт.</span>
+                        <span className="import-subtitle" style={{ fontFamily: 'var(--font-mono)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          {box.product.sku} ·
+                          <input
+                            className="input"
+                            type="number"
+                            min="1"
+                            style={{ width: '52px', padding: '1px 6px', height: '24px', fontFamily: 'var(--font-mono)', textAlign: 'right' }}
+                            value={box.count}
+                            onChange={(e) => updateBoxCount(box.boxNumber, e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          шт.
+                        </span>
                         <button
                           className="icon-btn danger"
                           type="button"
@@ -650,7 +672,7 @@ export default function ReceiptBoxWizard({ products, globalBoxSize, onSubmit, lo
                       style={{ textAlign: 'left', justifyContent: 'flex-start' }}
                       onClick={() => selectPlan(plan)}
                     >
-                      {plan.title} {plan.planned_date ? `(${plan.planned_date})` : ''} — {plan.items?.length ?? 0} поз.
+                      {plan.title} {plan.purchase_date ? `(${plan.purchase_date})` : ''} — {plan.item_count ?? 0} поз.
                     </button>
                   ))}
                 </div>

@@ -8,5 +8,6 @@ data class ProductUpdateRequest(
     val quantity: Int = 0,
     val description: String = "",
     @JsonProperty("default_box_size") val defaultBoxSize: Int? = null,
-    @JsonProperty("custom_fields") val customFields: List<Map<String, Any>> = emptyList()
+    @JsonProperty("custom_fields") val customFields: List<Map<String, Any>> = emptyList(),
+    @JsonProperty("is_active") val isActive: Boolean? = null
 )

@@ -1,5 +1,6 @@
 package com.ozonware.controller
 
+import com.ozonware.dto.request.ProductCatalogImportRequest
 import com.ozonware.dto.request.ProductCreateRequest
 import com.ozonware.dto.request.ProductUpdateRequest
 import com.ozonware.exception.BadRequestException
@@ -20,14 +21,15 @@ class ProductController(private val productService: ProductService) {
         @RequestParam(required = false) search: String?,
         @RequestParam(required = false) page: Int?,
         @RequestParam(required = false, defaultValue = "false") hideZeroStock: Boolean,
+        @RequestParam(required = false, defaultValue = "false") includeInactive: Boolean,
         @PageableDefault(size = 20, sort = ["id"], direction = Sort.Direction.DESC)
         pageable: Pageable
     ): ResponseEntity<Any> {
         if (page == null) {
-            return ResponseEntity.ok(productService.findAll(search).map { productService.toResponse(it) })
+            return ResponseEntity.ok(productService.findAll(search, includeInactive).map { productService.toResponse(it) })
         }
 
-        return ResponseEntity.ok(productService.findAllPaged(search, hideZeroStock, pageable))
+        return ResponseEntity.ok(productService.findAllPaged(search, hideZeroStock, includeInactive, pageable))
     }
 
     @GetMapping("/{id}")
@@ -49,14 +51,14 @@ class ProductController(private val productService: ProductService) {
     @PostMapping
     fun create(@RequestBody req: ProductCreateRequest): ResponseEntity<Map<String, Any?>> {
         if (req.name.isBlank() || req.sku.isBlank()) throw BadRequestException("Name and SKU are required")
-        val product = productService.createProduct(req.name, req.sku, req.quantity, req.description, req.defaultBoxSize, req.customFields)
+        val product = productService.createProduct(req.name, req.sku, req.quantity, req.description, req.defaultBoxSize, req.customFields, req.isActive)
 
         return ResponseEntity.status(201).body(productService.toResponse(product))
     }
 
     @PutMapping("/{id}")
     fun update(@PathVariable id: Long, @RequestBody req: ProductUpdateRequest): ResponseEntity<Map<String, Any?>> {
-        val product = productService.updateProduct(id, req.name, req.sku, req.quantity, req.description, req.defaultBoxSize, req.customFields)
+        val product = productService.updateProduct(id, req.name, req.sku, req.quantity, req.description, req.defaultBoxSize, req.customFields, req.isActive)
 
         return ResponseEntity.ok(productService.toResponse(product))
     }
@@ -66,5 +68,20 @@ class ProductController(private val productService: ProductService) {
         productService.deleteProduct(id)
 
         return ResponseEntity.ok(mapOf("message" to "Product deleted"))
+    }
+
+    @PostMapping("/catalog/import")
+    fun importCatalog(@RequestBody req: ProductCatalogImportRequest): ResponseEntity<Map<String, Int>> {
+        if (req.items.isEmpty()) throw BadRequestException("Список товаров не может быть пустым")
+        val result = productService.bulkCreateCatalog(req.items)
+
+        return ResponseEntity.status(201).body(result)
+    }
+
+    @PatchMapping("/{id}/activate")
+    fun activate(@PathVariable id: Long): ResponseEntity<Map<String, Any?>> {
+        val product = productService.activateProduct(id)
+
+        return ResponseEntity.ok(productService.toResponse(product))
     }
 }

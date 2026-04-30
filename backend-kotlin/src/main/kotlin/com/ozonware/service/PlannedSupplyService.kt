@@ -55,6 +55,7 @@ class PlannedSupplyService(
             )
         )
         val items = saveItems(supply.id!!, req.items)
+        activateCatalogProducts(items.mapNotNull { it.productId })
 
         return buildResponse(supply, items)
     }
@@ -187,6 +188,7 @@ class PlannedSupplyService(
 
         plannedSupplyItemRepository.deleteAllByPlannedSupplyId(id)
         val items = saveItems(id, req.items)
+        activateCatalogProducts(items.mapNotNull { it.productId })
 
         return buildResponse(supply, items)
     }
@@ -321,6 +323,18 @@ class PlannedSupplyService(
     }
 
     private fun buildResponse(supply: PlannedSupply, items: List<PlannedSupplyItem>): Map<String, Any?> {
+        val productIds = items.mapNotNull { it.productId }.toSet()
+        val productsById = if (productIds.isNotEmpty())
+            productRepository.findAllById(productIds).associateBy { it.id }
+        else emptyMap()
+
+        val skusToResolve = items.filter { it.productId == null }.map { it.sku.trim().lowercase() }.toSet()
+        val productsBySku = if (skusToResolve.isNotEmpty())
+            skusToResolve.mapNotNull { sku ->
+                productRepository.findBySku(sku).orElse(null)?.let { sku to it }
+            }.toMap()
+        else emptyMap()
+
         return mapOf(
             "id" to supply.id,
             "title" to supply.title,
@@ -333,15 +347,25 @@ class PlannedSupplyService(
             "created_at" to supply.createdAt?.toString(),
             "updated_at" to supply.updatedAt?.toString(),
             "items" to items.map { item ->
+                val product = productsById[item.productId]
+                    ?: productsBySku[item.sku.trim().lowercase()]
                 mapOf(
                     "id" to item.id,
                     "sku" to item.sku,
-                    "product_name" to item.productName,
-                    "product_id" to item.productId,
+                    "product_name" to (product?.name ?: item.productName),
+                    "product_id" to (item.productId ?: product?.id),
                     "planned_quantity" to item.plannedQuantity
                 )
             }
         )
+    }
+
+    private fun activateCatalogProducts(productIds: Collection<Long>) {
+        if (productIds.isEmpty()) return
+        val inactiveIds = productRepository.findAllById(productIds)
+            .filter { !it.isActive }
+            .mapNotNull { it.id }
+        if (inactiveIds.isNotEmpty()) productRepository.activateAll(inactiveIds)
     }
 
     private fun saveItems(

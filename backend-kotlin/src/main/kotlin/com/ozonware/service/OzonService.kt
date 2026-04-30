@@ -647,7 +647,7 @@ class OzonService(
         val apiKey = settings["apiKey"]?.asText()
             ?: throw BadRequestException("OZON Client ID and API Key are required")
 
-        productFieldsService.ensureSystemField("Фото OZON", SystemFieldKind.OZON_PHOTO.code, "image")
+        productFieldsService.ensureSystemField("Фото", SystemFieldKind.OZON_PHOTO.code, "image")
 
         val offerIds = mutableListOf<String>()
         var lastId = ""
@@ -722,7 +722,7 @@ class OzonService(
                 }
 
                 val prevPhoto = productFieldsService.readPhotoUrl(product.id!!)
-                if (prevPhoto == imageUrl) continue
+                if (!prevPhoto.isNullOrBlank()) continue
 
                 systemFieldAccessor.writeText(product.id!!, SystemFieldKind.OZON_PHOTO, imageUrl)
                 updated++

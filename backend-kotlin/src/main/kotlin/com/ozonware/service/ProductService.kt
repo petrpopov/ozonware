@@ -1,5 +1,6 @@
 package com.ozonware.service
 
+import com.ozonware.dto.request.ProductCatalogImportRequest
 import com.ozonware.exception.ConflictException
 import com.ozonware.exception.ResourceNotFoundException
 import com.ozonware.entity.Product
@@ -17,12 +18,12 @@ class ProductService(
     private val productFieldsService: ProductFieldsService
 ) {
 
-    fun findAll(search: String? = null): List<Product> {
-        return productRepository.findAllWithSearch(search)
+    fun findAll(search: String? = null, includeInactive: Boolean = false): List<Product> {
+        return productRepository.findAllWithSearch(search, includeInactive)
     }
 
-    fun findAllPaged(search: String?, hideZeroStock: Boolean, pageable: Pageable): Map<String, Any?> {
-        var products = productRepository.findAllWithSearch(search)
+    fun findAllPaged(search: String?, hideZeroStock: Boolean, includeInactive: Boolean = false, pageable: Pageable): Map<String, Any?> {
+        var products = productRepository.findAllWithSearch(search, includeInactive)
 
         val inStockSkus = products.count { it.quantity > 0 }
         val totalUnits = products.sumOf { maxOf(0L, it.quantity.toLong()) }
@@ -68,6 +69,7 @@ class ProductService(
         "quantity"         to product.quantity,
         "description"      to product.description,
         "default_box_size" to product.defaultBoxSize,
+        "is_active"        to product.isActive,
         "custom_fields"    to productFieldsService.readCustomFields(product.id!!),
         "created_at"       to product.createdAt?.toString(),
         "updated_at"       to product.updatedAt?.toString()
@@ -86,7 +88,8 @@ class ProductService(
         quantity: Int = 0,
         description: String = "",
         defaultBoxSize: Int? = null,
-        customFields: List<Map<String, Any>> = emptyList()
+        customFields: List<Map<String, Any>> = emptyList(),
+        isActive: Boolean = true
     ): Product {
         return try {
             val product = Product(
@@ -94,7 +97,8 @@ class ProductService(
                 sku = sku,
                 quantity = quantity,
                 description = description,
-                defaultBoxSize = defaultBoxSize
+                defaultBoxSize = defaultBoxSize,
+                isActive = isActive
             )
             val saved = productRepository.save(product)
             productFieldsService.syncFieldValues(saved.id!!, customFields)
@@ -105,6 +109,44 @@ class ProductService(
     }
 
     @Transactional
+    fun bulkCreateCatalog(
+        items: List<ProductCatalogImportRequest.CatalogItem>
+    ): Map<String, Int> {
+        var created = 0
+        var skipped = 0
+        for (item in items) {
+            if (item.sku.isBlank() || item.name.isBlank()) { skipped++; continue }
+            if (productRepository.findBySku(item.sku).isPresent) { skipped++; continue }
+            try {
+                createProduct(
+                    name = item.name,
+                    sku = item.sku,
+                    description = item.description,
+                    defaultBoxSize = item.defaultBoxSize,
+                    customFields = item.customFields,
+                    isActive = false
+                )
+                created++
+            } catch (e: ConflictException) {
+                skipped++
+            }
+        }
+
+        return mapOf("created" to created, "skipped" to skipped, "total" to items.size)
+    }
+
+    @Transactional
+    fun activateProduct(id: Long): Product {
+        val product = findById(id)
+        if (!product.isActive) {
+            product.isActive = true
+            return productRepository.save(product)
+        }
+
+        return product
+    }
+
+    @Transactional
     fun updateProduct(
         id: Long,
         name: String,
@@ -112,7 +154,8 @@ class ProductService(
         quantity: Int,
         description: String,
         defaultBoxSize: Int? = null,
-        customFields: List<Map<String, Any>>
+        customFields: List<Map<String, Any>>,
+        isActive: Boolean? = null
     ): Product {
         return try {
             val product = findById(id)
@@ -121,6 +164,7 @@ class ProductService(
             product.quantity = quantity
             product.description = description
             product.defaultBoxSize = defaultBoxSize
+            if (isActive != null) product.isActive = isActive
             val saved = productRepository.save(product)
             productFieldsService.syncFieldValues(saved.id!!, customFields)
             saved

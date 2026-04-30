@@ -34,7 +34,7 @@ class ProductFieldsService(
         val legacyNameToKind = mapOf(
             "OZON" to SystemFieldKind.OZON_SKU,
             "Артикул OZON" to SystemFieldKind.OZON_ARTICLE,
-            "Фото OZON" to SystemFieldKind.OZON_PHOTO
+            "Фото" to SystemFieldKind.OZON_PHOTO
         )
         for ((name, fieldKind) in legacyNameToKind) {
             val field = productFieldRepository.findByName(name) ?: continue
@@ -150,6 +150,11 @@ class ProductFieldsService(
                     ?.id?.let { productFieldValueRepository.deleteById(it) }
                 deleted++
             } else {
+                if (field.type == "select" && value !in field.options) {
+                    field.options = field.options + value
+                    productFieldRepository.save(field)
+                    log.info("[ProductFieldsService] syncFieldValues: auto-added option '{}' to field '{}'", value, name)
+                }
                 productFieldValueRepository.upsertTextValue(productId, fid, value)
                 updated++
             }

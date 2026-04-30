@@ -25,6 +25,9 @@ data class Product(
     @Column(name = "default_box_size")
     var defaultBoxSize: Int? = null,
 
+    @Column(name = "is_active", nullable = false)
+    var isActive: Boolean = true,
+
     @Column(name = "created_at")
     var createdAt: LocalDateTime? = null,
 
